@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QPlainTextEdit, QLineEdit
-from ui.styles import AppStyles
 import sys
+from app_logic import CommandHandler
 
 class Terminal(QPlainTextEdit):
     def __init__(self, parent=None):
@@ -12,31 +12,14 @@ class Prompt(QLineEdit):
         super(Prompt, self).__init__(parent)
         self.setPlaceholderText("Interact with the Analyzer...")
 
-class CommandHandler:
-    def __init__(self):
-        pass
-
-    def handler(self, command):
-        # Dispatch the command to the appropriate method
-        if command.startswith("get price"):
-            return self.get_price(command.split()[2])
-
-    def get_price(self, item):
-        return item
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.apply_styles()
         self.setWindowTitle("Market Analyzer")
         self.setGeometry(100, 100, 800, 600)
         self.command_handler = CommandHandler()
         self.initUI()
-
-    def apply_styles(self):
-        self.terminal.setStyleSheet(AppStyles.get_terminal_style())
-        self.prompt.setStyleSheet(AppStyles.get_prompt_style())
-        self.setStyleSheet(AppStyles.get_main_window_style())
+        self.applyStyles()
 
     def initUI(self):
         central_widget = QWidget(self)
@@ -51,6 +34,32 @@ class MainWindow(QMainWindow):
         self.prompt = Prompt()
         self.prompt.returnPressed.connect(self.process_command)
         layout.addWidget(self.prompt)
+
+    def applyStyles(self):
+        # Apply the stylesheet to the application
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #262626; /* Dark background for the main window */
+            }
+            QPlainTextEdit, QLineEdit {
+                background-color: #131418;
+                color: #dcdcdc;
+                border: 2px solid #6A6A6A;
+                font-family: 'Consolas', 'Courier New', monospace;
+                border-radius: 3px;
+                padding: 5px;
+                font-size: 12px;
+            }
+            QLineEdit {
+                background-color: #333333;
+                color: #ffffff;
+                border: 2px solid #6A6A6A;
+                border-radius: 3px;
+                padding: 5px;
+                font-size: 12px;
+            }
+            /* Add more styles as needed */
+        """)
 
     def process_command(self):
         command = self.prompt.text()

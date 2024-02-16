@@ -19,3 +19,15 @@ class AppLogic:
         return "Prediction made based on processed data"
 
     # Add more methods as needed for your application's functionality
+
+class CommandHandler:
+    def __init__(self):
+        pass
+
+    def handler(self, command):
+        # Dispatch the command to the appropriate method
+        if command.startswith("get price"):
+            return self.get_price(command.split()[2])
+
+    def get_price(self, item):
+        return item
