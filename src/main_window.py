@@ -13,7 +13,7 @@ class Terminal(QPlainTextEdit):
 class Prompt(QLineEdit):
     def __init__(self, parent=None):
         super(Prompt, self).__init__(parent)
-        self.setPlaceholderText("Interact with the Analyzer...")
+        self.setPlaceholderText("get list cmd")
 
 class HistoricalDataPlot(QWidget):
     def __init__(self, dates, prices, parent=None):
@@ -57,7 +57,7 @@ class MainWindow(QMainWindow):
         # Initialize the terminal
         self.terminal = Terminal()
         layout.addWidget(self.terminal)
-        self.terminal.appendPlainText(f"> Welcome to the Market Analyzer tool. Input 'get list cmd' for all possible commands.")
+        self.terminal.appendPlainText(f"> Welcome to the Market Analyzer tool. Plug in 'get list cmd' for a list of all commands.")
 
         # Initialize the prompt
         self.prompt = Prompt()
@@ -68,7 +68,7 @@ class MainWindow(QMainWindow):
         # Apply the stylesheet to the application
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #262626; /* Dark background for the main window */
+                background-color: #262626;
             }
             QPlainTextEdit, QLineEdit {
                 background-color: #131418;
@@ -79,6 +79,34 @@ class MainWindow(QMainWindow):
                 padding: 5px;
                 font-size: 12px;
             }
+            QScrollBar:vertical {
+                border: none;
+                background-color: #292829;
+                width: 14px;
+                margin: 14px 0 14px 0;
+            }
+
+            QScrollBar::handle:vertical {
+                background-color: #3a393a;
+                min-height: 30px;
+            }
+
+            QScrollBar::add-line:vertical {
+                border: none;
+                background: none;
+            }
+            QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+            }
+            QScrollBar::add-page:vertical {
+                border: none;
+                background: none;
+            }
+            QScrollBar::sub-page:vertical {
+                border: none;
+                background: none;
+            }
             QLineEdit {
                 background-color: #333333;
                 color: #ffffff;
@@ -87,7 +115,6 @@ class MainWindow(QMainWindow):
                 padding: 5px;
                 font-size: 12px;
             }
-            /* Add more styles as needed */
         """)
 
     def process_command(self):
@@ -97,8 +124,6 @@ class MainWindow(QMainWindow):
             self.terminal.appendPlainText(f"> {command}\n{result}")
             self.prompt.clear()
 
-    def show_historical_data(self, symbol):
-        historical_data = self.alpha_vantage.fetch_historical_data(symbol)
-        dates, prices = self.data_processor.process_historical_data(historical_data)
+    def show_historical_data(self, dates, prices):
         self.graph.plot(dates, prices)
         self.graph.show()
