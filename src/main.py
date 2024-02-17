@@ -4,7 +4,8 @@ from main_window import MainWindow
 
 def main():
     app = QApplication(sys.argv)
-    window = MainWindow()
+    api_key = "ZXU8ZDWQW76T5XUA"
+    window = MainWindow(api_key=api_key)
     window.show()
     sys.exit(app.exec())
 
