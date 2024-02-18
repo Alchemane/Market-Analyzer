@@ -2,8 +2,6 @@ from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QPlainTextEdit,
 from command_handler import CommandHandler
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-from data_processor import DataProcessor
-from alpha_vantage import AlphaVantage
 
 class Terminal(QPlainTextEdit):
     def __init__(self, parent=None):
@@ -24,13 +22,20 @@ class HistoricalDataPlot(QWidget):
         layout.addWidget(self.canvas)
         self.plot(dates, prices)
 
-    def plot(self, dates, prices):
+    def plot(self, dates, prices, predictions=None):
         self.figure.clear()
         ax = self.figure.add_subplot(111)
-        ax.plot(dates, prices, '-o', markersize=4)
-        ax.set_title('Historical Price Data')
+        
+        ax.plot(dates, prices, '-o', markersize=4, label='Historical Prices', color='blue')
+        if predictions is not None:
+            future_dates, future_predictions = predictions
+            ax.plot(future_dates, future_predictions, '-x', markersize=4, label='Predicted Prices', color='red')
+        
+        ax.set_title('Historical and Predicted Price Data')
         ax.set_xlabel('Date')
         ax.set_ylabel('Price')
+        ax.legend(loc='best')
+        self.figure.autofmt_xdate()
         self.canvas.draw()
 
 class MainWindow(QMainWindow):
@@ -38,8 +43,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Market Analyzer")
         self.setGeometry(100, 100, 800, 600)
-        self.alpha_vantage = AlphaVantage(api_key=api_key)
-        self.data_processor = DataProcessor()
         self.command_handler = CommandHandler(main_window=self, api_key=api_key)
         self.initUI()
         self.applyStyles()
@@ -120,10 +123,23 @@ class MainWindow(QMainWindow):
     def process_command(self):
         command = self.prompt.text()
         if command:
-            result = self.command_handler.handler(command)
+            result = self.command_handler.handle_command(command)
             self.terminal.appendPlainText(f"> {command}\n{result}")
             self.prompt.clear()
 
     def show_historical_data(self, dates, prices):
         self.graph.plot(dates, prices)
+        self.graph.show()
+
+    def plot_future_predictions(self, dates, prices, future_dates, future_predictions):
+        # Ensure the graph is initialized
+        if not hasattr(self, 'graph'):
+            self.graph = HistoricalDataPlot([], [], self)
+        
+        # Combine historical dates and prices with future dates and predictions
+        all_dates = dates + future_dates
+        all_prices = prices + future_predictions
+
+        # Call the plot method of the graph with combined data
+        self.graph.plot(all_dates, all_prices)
         self.graph.show()
