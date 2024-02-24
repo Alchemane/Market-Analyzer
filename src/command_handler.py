@@ -21,24 +21,42 @@ class CommandHandler:
             "predict svr": self.predict_svr,
             "show predictions": self.show_future_predictions
         }
-
+        
     def handle_command(self, command):
         command = command.strip()
-        parts = command.split()       
-        if parts[0] == "show" and parts[1] == "predictions":
-            cmd_key = " ".join(parts[:3])
-            args = parts[3:]
+        parts = command.split()
+        if command == "get list cmd":
+            return self.get_list_cmd()
+        if len(parts) > 1 and parts[0] == "show" and parts[1] == "predictions":
+            if len(parts) >= 4:
+                symbol = parts[2]
+                model_type = parts[3]
+                n_days = int(parts[4]) if len(parts) > 4 else 30
+                return self.show_future_predictions(symbol, model_type, n_days)
+            else:
+                return "Error: Insufficient arguments for 'show predictions'. Expected format: 'show predictions {symbol} {model_type} {n_days}'."
+        if parts[0] == "fit" and len(parts) >= 3:
+            model_type = parts[1]
+            symbol = parts[2]
+            days = int(parts[3]) if len(parts) > 3 else None
+            cmd_key = f"fit {model_type}"
+            if cmd_key in self.command_map:
+                try:
+                    return self.command_map[cmd_key](symbol, days)
+                except TypeError as e:
+                    return f"Error in command usage: {e}"
+            else:
+                return "Unknown command"
         else:
             cmd_key = parts[0]
             args = parts[1:]
-
-        if cmd_key in self.command_map:
-            try:
-                return self.command_map[cmd_key](*args)
-            except TypeError as e:
-                return f"Error in command usage: {e}"
-        else:
-            return "Unknown command"
+            if cmd_key in self.command_map:
+                try:
+                    return self.command_map[cmd_key](*args)
+                except TypeError as e:
+                    return f"Error in command usage: {e}"
+            else:
+                return "Unknown command"
 
     def get_list_cmd(self):
         commands = [
@@ -63,17 +81,23 @@ class CommandHandler:
         return "Displaying historical data..."
     
     def show_future_predictions(self, symbol, model_type='linear', n_days=30):
-        if model_type not in ['linear', 'svr']:
-            return f"Unknown model type: {model_type}. Please use 'linear' or 'svr'."
+        model = self.linear_regressor if model_type == 'linear' else self.svr_regressor
+        if not model.is_fitted:
+            return f"{model_type.upper()} model not fitted. Please fit the model with historical data first."
+        
         historical_data = self.av.fetch_historical_data(symbol)
         dates, prices = self.data_processor.process_historical_data(historical_data)
         dates = [datetime.strptime(date, '%Y-%m-%d') for date in dates]
         prices = [float(price) for price in prices]
-        model = self.linear_regressor if model_type == 'linear' else self.svr_regressor
-        if not model.is_fitted:
-            return f"{model_type.upper()} model not fitted. Please fit the model with historical data first."
-        future_dates, future_predictions = model.predict_future_prices(dates, prices, n_days)
-        self.main_window.plot_future_predictions(symbol, dates + future_dates, prices + future_predictions)
+
+        future_dates = [dates[-1] + timedelta(days=i) for i in range(1, n_days + 1)]
+        future_predictions = model.predict_future_prices(n_days)
+
+        if len(future_predictions) != len(future_dates):
+            return "Error: Mismatch in lengths of future dates and predictions."
+
+        future_predictions = list(future_predictions)
+        self.main_window.plot_future_predictions(dates, prices, future_dates, future_predictions)
         return f"Displaying future predictions for {symbol} using {model_type} model..."
     
     def get_price(self, symbol):
@@ -108,14 +132,6 @@ class CommandHandler:
         predicted_price = self.linear_regressor.predict()
         return f"Predicted price for {symbol} is {predicted_price[0]}"
     
-    def predict_future_linear_regression(self, symbol, n_days):
-        # Ensure the model is fitted
-        if not self.linear_regressor.is_fitted:
-            return "Linear regression model not fitted. Please fit the model with historical data first."
-        predicted_prices = self.linear_regressor.predict_future_prices(n_days)
-        self.main_window.plot_future_predictions(symbol, predicted_prices, n_days)
-        return f"Predicted future prices for {symbol} using linear regression."
-    
     # Support Vector Regression
     def fit_svr(self, symbol, days=None):
         historical_data = self.av.fetch_historical_data(symbol=symbol)        
@@ -137,10 +153,3 @@ class CommandHandler:
             return "SVR model not fitted. Please fit the model with historical data first."
         predicted_price = self.svr_regressor.predict()
         return f"Predicted price for {symbol} with SVR is {predicted_price[0]}"
-    
-    def predict_future_svr(self, symbol, n_days):
-        if not self.svr_regressor.is_fitted:
-            return "SVR model not fitted. Please fit the model with historical data first."
-        predicted_prices = self.svr_regressor.predict_future_prices(n_days)
-        self.main_window.plot_future_predictions(symbol, predicted_prices, n_days)
-        return f"Predicted future prices for {symbol} using SVR."

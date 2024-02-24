@@ -52,10 +52,13 @@ class SVRRegressor:
         predicted_price = self.regressor.predict(next_day_index)
         return predicted_price
     
-    def predict_future_prices(self, n_days=30):
+    def predict_future_prices(self, n_days):
         if not self.is_fitted:
-            raise Exception("Model not fitted. Please fit the model with historical data first.")
+            raise Exception("Model not fitted. Call fit() with historical data first.")
         
+        # Assuming self.last_day_index is the index of the last day in the training data
         future_indices = np.array([self.last_day_index + i for i in range(1, n_days + 1)]).reshape(-1, 1)
-        predicted_prices = self.regressor.predict(future_indices)
-        return predicted_prices
+        
+        # Predict future prices
+        future_prices = self.regressor.predict(future_indices)
+        return future_prices

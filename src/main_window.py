@@ -2,6 +2,7 @@ from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QPlainTextEdit,
 from command_handler import CommandHandler
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+from datetime import timedelta
 
 class Terminal(QPlainTextEdit):
     def __init__(self, parent=None):
@@ -22,13 +23,16 @@ class HistoricalDataPlot(QWidget):
         layout.addWidget(self.canvas)
         self.plot(dates, prices)
 
-    def plot(self, dates, prices, predictions=None):
+    def plot(self, dates, prices, future_predictions=None):
         self.figure.clear()
         ax = self.figure.add_subplot(111)
         
+        # Plot historical prices
         ax.plot(dates, prices, '-o', markersize=4, label='Historical Prices', color='blue')
-        if predictions is not None:
-            future_dates, future_predictions = predictions
+        
+        # Plot future predictions if provided
+        if future_predictions is not None:
+            future_dates = dates[-1:] + [dates[-1] + timedelta(days=i) for i in range(1, len(future_predictions) + 1)]
             ax.plot(future_dates, future_predictions, '-x', markersize=4, label='Predicted Prices', color='red')
         
         ax.set_title('Historical and Predicted Price Data')
@@ -136,10 +140,8 @@ class MainWindow(QMainWindow):
         if not hasattr(self, 'graph'):
             self.graph = HistoricalDataPlot([], [], self)
         
-        # Combine historical dates and prices with future dates and predictions
         all_dates = dates + future_dates
         all_prices = prices + future_predictions
 
-        # Call the plot method of the graph with combined data
-        self.graph.plot(all_dates, all_prices)
+        self.graph.plot(all_dates, all_prices, future_predictions=future_predictions)
         self.graph.show()
