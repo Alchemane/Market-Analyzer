@@ -12,7 +12,7 @@ class Terminal(QPlainTextEdit):
 class Prompt(QLineEdit):
     def __init__(self, parent=None):
         super(Prompt, self).__init__(parent)
-        self.setPlaceholderText("get list cmd")
+        self.setPlaceholderText("lst cmd")
 
 class HistoricalDataPlot(QWidget):
     def __init__(self, dates, prices, parent=None):
@@ -23,19 +23,11 @@ class HistoricalDataPlot(QWidget):
         layout.addWidget(self.canvas)
         self.plot(dates, prices)
 
-    def plot(self, dates, prices, future_predictions=None):
+    def plot(self, dates, prices):
         self.figure.clear()
         ax = self.figure.add_subplot(111)
-        
-        # Plot historical prices
         ax.plot(dates, prices, '-o', markersize=4, label='Historical Prices', color='blue')
-        
-        # Plot future predictions if provided
-        if future_predictions is not None:
-            future_dates = dates[-1:] + [dates[-1] + timedelta(days=i) for i in range(1, len(future_predictions) + 1)]
-            ax.plot(future_dates, future_predictions, '-x', markersize=4, label='Predicted Prices', color='red')
-        
-        ax.set_title('Historical and Predicted Price Data')
+        ax.set_title('Historical Price Data')
         ax.set_xlabel('Date')
         ax.set_ylabel('Price')
         ax.legend(loc='best')
@@ -133,15 +125,4 @@ class MainWindow(QMainWindow):
 
     def show_historical_data(self, dates, prices):
         self.graph.plot(dates, prices)
-        self.graph.show()
-
-    def plot_future_predictions(self, dates, prices, future_dates, future_predictions):
-        # Ensure the graph is initialized
-        if not hasattr(self, 'graph'):
-            self.graph = HistoricalDataPlot([], [], self)
-        
-        all_dates = dates + future_dates
-        all_prices = prices + future_predictions
-
-        self.graph.plot(all_dates, all_prices, future_predictions=future_predictions)
         self.graph.show()
