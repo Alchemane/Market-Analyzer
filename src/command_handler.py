@@ -1,7 +1,7 @@
 import requests
 from alpha_vantage import AlphaVantage
 from machine_learning import (LinearRegressor, SVRRegressor, PolynomialRegressor, 
-                              DecisionTreeRegressor, RandomForestRegressor)
+                              DecisionTreeRegression, RandomForestRegression)
 from data_processor import DataProcessor
 from datetime import datetime, timedelta
 
@@ -14,28 +14,18 @@ class CommandHandler:
             "get price": self.get_price,
             "lst cmd": self.get_list_cmd,
             "show hist": self.show_historical_data,
-            "fit lr": self.fit_linear_regression,
-            "pred lr": self.predict_linear_regression,
-            "fit svr": self.fit_svr,
-            "pred svr": self.predict_svr,
-            "fit poly": self.fit_polynomial_regression,
-            "pred poly": self.predict_polynomial_regression,
-            "fit dt": self.fit_decision_tree_regression,
-            "pred dt": self.predict_decision_tree_regression,
-            "fit rf": self.fit_random_forest_regression,
-            "pred rf": self.predict_random_forest_regression,
         }
         self.models = {
             "lr": LinearRegressor(),
             "svr": SVRRegressor(),
-            "poly": PolynomialRegressor(),
-            "dt": DecisionTreeRegressor(),
-            "rf": RandomForestRegressor(),
+            "polyr": PolynomialRegressor(),
+            "dtr": DecisionTreeRegression(),
+            "rfr": RandomForestRegression(),
             #: MultipleLinearRegressor(),
         }
         for model_key in self.models.keys():
-            self.command_map[f"fit {model_key}"] = self.fit_model
-            self.command_map[f"pred {model_key}"] = self.predict_model
+            self.command_map[f"fit {model_key}"] = lambda symbol, days=None, mk=model_key: self.fit_model(mk, symbol, days)
+            self.command_map[f"pred {model_key}"] = lambda symbol, mk=model_key: self.predict_model(mk, symbol)
         
     def handle_command(self, command):
         command = command.strip()
@@ -43,29 +33,42 @@ class CommandHandler:
         cmd_key = parts[0]
         if cmd_key not in self.command_map:
             return "Unknown command"
-
         args = parts[1:]
-        try:
-            if cmd_key in ["fit lr", "fit svr", "pred lr", "pred svr"] and len(args) < 1:
-                raise ValueError("Symbol is required.")
-            symbol = args[0] if len(args) > 0 else None
-            days = int(args[1]) if len(args) > 1 else None
-            return self.command_map[cmd_key](symbol, days)
-        except ValueError as e:
-            return f"Error: {str(e)}"
+        if cmd_key.startswith("fit") or cmd_key.startswith("pred"):
+            if len(args) < 1: # Symbol provided?
+                return "Error: Symbol is required."
+
+            symbol = args[0]
+            days = int(args[1]) if len(args) > 1 and cmd_key.startswith("fit") else None
+            model_key = cmd_key.split()[1]
+            if model_key not in self.models:
+                return f"Error: Unknown model '{model_key}'."
+
+            if cmd_key.startswith("fit"):
+                return self.fit_model(model_key, symbol, days)
+            elif cmd_key.startswith("pred"):
+                return self.predict_model(model_key, symbol)
+        else:
+            try:
+                return self.command_map[cmd_key](*args)
+            except ValueError as e:
+                return f"Error: {str(e)}"
 
     def get_list_cmd(self):
         commands = [
-            "get price {symbol} - Returns the price of the specified symbol.",
             "lst cmd - Lists all available commands.",
+            "get price {symbol} - Returns the price of the specified symbol.",
             "show hist {symbol} - Displays historical price data for the specified symbol.",
             "fit lr {symbol} {days} - Fits the linear regression model to the historical data of the specified symbol. Optionally, specify the number of recent days to use.",
             "pred lr {symbol} - Predicts the next price for the specified symbol using the fitted linear regression model. Requires the model to be fitted first.",
-            "fit svr {symbol} {days} - Fits the SVR model to the historical data of the specified symbol. Optionally, specify the number of recent days to use.",
-            "pred svr {symbol} - Predicts the next price for the specified symbol using the fitted SVR model. Requires the model to be fitted first.",
-            "fit poly {symbol} {days} - Fits the polynomial regression model.",
-            "pred poly {symbol} - Predicts the next price using the polynomial regression model.",
-            "fit dt {symbol} {days} - Fits the decision tree regression model.",
+            "fit svr {symbol} {days} - Fits the support vector regression model to the historical data of the specified symbol. Optionally, specify the number of recent days to use.",
+            "pred svr {symbol} - Predicts the next price for the specified symbol using the fitted support vector regression model. Requires the model to be fitted first.",
+            "fit polyr {symbol} {days} - Fits the polynomial regression model to the historical data of the specified symbol. Optionally, specify the number of recent days to use.",
+            "pred polyr {symbol} - Predicts the next price for the specified symbol using the fitted polynomial regression model. Requires the model to be fitted first.",
+            "fit dtr {symbol} {days} - Fits the decision tree regression model to the historical data of the specified symbol. Optionally, specify the number of recent days to use.",
+            "pred dtr {symbol} - Predicts the next price for the specified symbol using the fitted decision tree regression model. Requires the model to be fitted first.",
+            "fit rfr {symbol} {days} - Fits the random forest regression model to the historical data of the specified symbol. Optionally, specify the number of recent days to use.",
+            "pred rfr {symbol} - Predicts the next price for the specified symbol using the fitted random forest regression model. Requires the model to be fitted first.",
         ]
         return "\n".join(commands)
     
@@ -90,7 +93,7 @@ class CommandHandler:
         
     def fit_model(self, model_key, symbol, days=None):
         if model_key not in self.models:
-            return "Unknown model"
+            return "Error: Unknown model"
         historical_data = self.av.fetch_historical_data(symbol=symbol)
         if days is not None:
             days = int(days)
@@ -98,28 +101,18 @@ class CommandHandler:
             filtered_historical_data = {date: value for date, value in historical_data.items() if datetime.strptime(date, '%Y-%m-%d') >= cutoff_date}
         else:
             filtered_historical_data = historical_data
-        model = self.models[model_key]
         dates = list(filtered_historical_data.keys())
         prices = [value["4. close"] for value in filtered_historical_data.values()]
         dates, prices = zip(*sorted(zip(dates, prices), key=lambda x: x[0]))
         day_indices = list(range(len(dates)))
-        self.model_key.fit(day_indices, list(prices))
+        model = self.models[model_key]
+        model.fit(day_indices, list(prices))
         return f"Fitted {symbol} to the {model_key.upper()} model using the last {(days + 'days') if days else 'entire'} period's data..."
         
-
-    def predict_linear_regression(self, symbol):
-        if not self.linear_regressor.is_fitted:
-            return "Model not fitted. Please fit the model with historical data first."
-        predicted_price = self.linear_regressor.predict()
-        return f"Predicted price for {symbol} is {predicted_price[0]}"
-
-
-    
     def predict_model(self, model_key, symbol):
         if model_key not in self.models:
-            return "Unknown model"
+            return "Error: Unknown model"
         model = self.models[model_key]
-
-
-
-        return f"Predicted price for {symbol} using {model_key.upper()} model..."
+        next_day_index = [[model.last_day_index + 1]]
+        predicted_price = model.predict([[next_day_index]])
+        return f"Predicted price for {symbol} tomorrow using {model_key.upper()} model is {predicted_price[0]}"

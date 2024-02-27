@@ -59,7 +59,7 @@ class SVRRegressor:
             return "Model not fitted. Please fit the model with historical data first."
         return self.regressor.predict(X)
     
-class DecisionTreeRegressor:
+class DecisionTreeRegression:
     def __init__(self, random_state=42):
         self.regressor = DecisionTreeRegressor(random_state=random_state)
         self.is_fitted = False
@@ -76,7 +76,7 @@ class DecisionTreeRegressor:
         X = np.array(X).reshape(-1, 1)
         return self.regressor.predict(X)
 
-class RandomForestRegressor:
+class RandomForestRegression:
     def __init__(self, n_estimators=100, random_state=42):
         self.regressor = RandomForestRegressor(n_estimators=n_estimators, random_state=random_state)
         self.is_fitted = False
