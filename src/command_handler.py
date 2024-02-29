@@ -30,29 +30,32 @@ class CommandHandler:
     def handle_command(self, command):
         command = command.strip()
         parts = command.split()
-        cmd_key = parts[0]
+        cmd_key = ' '.join(parts[:2]) if len(parts) > 1 else parts[0]
+
+        if cmd_key == "lst cmd":
+            return self.get_list_cmd()
+
+        if cmd_key in self.command_map:
+            args = parts[2:] if len(parts) > 2 else []
+        else:
+            cmd_key = parts[0]
+            args = parts[1:] if len(parts) > 1 else []
+
         if cmd_key not in self.command_map:
             return "Unknown command"
-        args = parts[1:]
-        if cmd_key.startswith("fit") or cmd_key.startswith("pred"):
-            if len(args) < 1: # Symbol provided?
-                return "Error: Symbol is required."
 
-            symbol = args[0]
-            days = int(args[1]) if len(args) > 1 and cmd_key.startswith("fit") else None
-            model_key = cmd_key.split()[1]
-            if model_key not in self.models:
-                return f"Error: Unknown model '{model_key}'."
-
-            if cmd_key.startswith("fit"):
-                return self.fit_model(model_key, symbol, days)
-            elif cmd_key.startswith("pred"):
-                return self.predict_model(model_key, symbol)
-        else:
-            try:
+        try:
+            # Handle commands that require symbol and possibly days
+            if cmd_key in ["fit lr", "fit svr", "fit polyr", "fit dtr", "fit rfr", "pred lr", "pred svr", "pred polyr", "pred dtr", "pred rfr"]:
+                if not args:  # Symbol provided?
+                    return "Error: Symbol is required."
+                symbol = args[0]
+                days = int(args[1]) if len(args) > 1 else None
+                return self.command_map[cmd_key](symbol, days) if "fit" in cmd_key else self.command_map[cmd_key](symbol)
+            else:
                 return self.command_map[cmd_key](*args)
-            except ValueError as e:
-                return f"Error: {str(e)}"
+        except ValueError as e:
+            return f"Error: {str(e)}"
 
     def get_list_cmd(self):
         commands = [
@@ -107,7 +110,7 @@ class CommandHandler:
         day_indices = list(range(len(dates)))
         model = self.models[model_key]
         model.fit(day_indices, list(prices))
-        return f"Fitted {symbol} to the {model_key.upper()} model using the last {(days + 'days') if days else 'entire'} period's data..."
+        return f"Fitted {symbol} to the {model_key.upper()} model using the {'last', days, 'days\'' if days else 'entire period\'s'} data..."
         
     def predict_model(self, model_key, symbol):
         if model_key not in self.models:

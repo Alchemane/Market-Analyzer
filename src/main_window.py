@@ -56,7 +56,7 @@ class MainWindow(QMainWindow):
         # Initialize the terminal
         self.terminal = Terminal()
         layout.addWidget(self.terminal)
-        self.terminal.appendPlainText(f"> Welcome to the Market Analyzer tool. Plug in 'get list cmd' for a list of all commands.")
+        self.terminal.appendPlainText(f"> Welcome to the Market Analyzer tool. Plug in 'lst cmd' for a list of all commands.")
 
         # Initialize the prompt
         self.prompt = Prompt()

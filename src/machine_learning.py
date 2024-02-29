@@ -57,6 +57,7 @@ class SVRRegressor:
     def predict(self, X):
         if not self.is_fitted:
             return "Model not fitted. Please fit the model with historical data first."
+        X = np.array(X).reshape(-1, 1)
         return self.regressor.predict(X)
     
 class DecisionTreeRegression:
