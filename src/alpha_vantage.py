@@ -26,3 +26,26 @@ class AlphaVantage:
             return time_series
         else:
             response.raise_for_status()
+
+    def fetch_market_capitalization(self, symbol):
+        url = f"https://www.alphavantage.co/query?function=OVERVIEW&symbol={symbol}&apikey={self.api_key}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            market_cap = data.get("MarketCapitalization", "Data not available")
+            return market_cap
+        else:
+            response.raise_for_status()
+
+    def fetch_real_time_volume(self, symbol):
+        url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={self.api_key}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            if "Global Quote" in data:
+                volume = data["Global Quote"].get("06. volume", "Volume data not available")
+                return volume
+            else:
+                return None
+        else:
+            response.raise_for_status()

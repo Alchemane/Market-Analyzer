@@ -4,6 +4,7 @@ from machine_learning import (LinearRegressor, SVRRegressor, PolynomialRegressor
                               DecisionTreeRegression, RandomForestRegression)
 from data_processor import DataProcessor
 from datetime import datetime, timedelta
+import textwrap
 
 class CommandHandler:
     def __init__(self, main_window=None, api_key=""):
@@ -14,6 +15,9 @@ class CommandHandler:
             "get price": self.get_price,
             "lst cmd": self.get_list_cmd,
             "show hist": self.show_historical_data,
+            "get %price": self.get_price_change_percentage,
+            "get mktcap": self.get_market_cap,
+            "get vol": self.get_volume,
         }
         self.models = {
             "lr": LinearRegressor(),
@@ -34,7 +38,7 @@ class CommandHandler:
 
         if cmd_key == "lst cmd":
             return self.get_list_cmd()
-
+        
         if cmd_key in self.command_map:
             args = parts[2:] if len(parts) > 2 else []
         else:
@@ -46,12 +50,15 @@ class CommandHandler:
 
         try:
             # Handle commands that require symbol and possibly days
-            if cmd_key in ["fit lr", "fit svr", "fit polyr", "fit dtr", "fit rfr", "pred lr", "pred svr", "pred polyr", "pred dtr", "pred rfr"]:
+            if cmd_key in ["fit lr", "fit svr", "fit polyr", "fit dtr", "fit rfr", "pred lr", "pred svr", "pred polyr", "pred dtr", "pred rfr", "get %price"]:
                 if not args:  # Symbol provided?
                     return "Error: Symbol is required."
                 symbol = args[0]
                 days = int(args[1]) if len(args) > 1 else None
-                return self.command_map[cmd_key](symbol, days) if "fit" in cmd_key else self.command_map[cmd_key](symbol)
+                if "fit" in cmd_key or cmd_key == "get %price":
+                    return self.command_map[cmd_key](symbol, days)
+                else:
+                    return self.command_map[cmd_key](symbol)
             else:
                 return self.command_map[cmd_key](*args)
         except ValueError as e:
@@ -59,21 +66,36 @@ class CommandHandler:
 
     def get_list_cmd(self):
         commands = [
-            "lst cmd - Lists all available commands.",
-            "get price {symbol} - Returns the price of the specified symbol.",
-            "show hist {symbol} - Displays historical price data for the specified symbol.",
-            "fit lr {symbol} {days} - Fits the linear regression model to the historical data of the specified symbol. Optionally, specify the number of recent days to use.",
-            "pred lr {symbol} - Predicts the next price for the specified symbol using the fitted linear regression model. Requires the model to be fitted first.",
-            "fit svr {symbol} {days} - Fits the support vector regression model to the historical data of the specified symbol. Optionally, specify the number of recent days to use.",
-            "pred svr {symbol} - Predicts the next price for the specified symbol using the fitted support vector regression model. Requires the model to be fitted first.",
-            "fit polyr {symbol} {days} - Fits the polynomial regression model to the historical data of the specified symbol. Optionally, specify the number of recent days to use.",
-            "pred polyr {symbol} - Predicts the next price for the specified symbol using the fitted polynomial regression model. Requires the model to be fitted first.",
-            "fit dtr {symbol} {days} - Fits the decision tree regression model to the historical data of the specified symbol. Optionally, specify the number of recent days to use.",
-            "pred dtr {symbol} - Predicts the next price for the specified symbol using the fitted decision tree regression model. Requires the model to be fitted first.",
-            "fit rfr {symbol} {days} - Fits the random forest regression model to the historical data of the specified symbol. Optionally, specify the number of recent days to use.",
-            "pred rfr {symbol} - Predicts the next price for the specified symbol using the fitted random forest regression model. Requires the model to be fitted first.",
+            ("lst cmd", "Lists all available commands."),
+            ("get price {symbol}", "Returns the current price of the specified symbol."),
+            ("show hist {symbol}", "Displays historical price data for the specified symbol."),
+            ("get %price {symbol} {days}", "Returns the percentage change of the price of the specified symbol since the beginning. Optionally, specify the number of recent days to use."),
+            ("get mktcap {symbol}", "Returns the current market capitalization of the specified symbol."),
+            ("get volume {symbol}", "Returns the trading current volume of the specified symbol."),
+            ("fit lr {symbol} {days}", "Fits the linear regression model to the historical data of the specified symbol. Optionally, specify the number of recent days to use."),
+            ("pred lr {symbol}", "Predicts the next price for the specified symbol using the fitted linear regression model. Requires the model to be fitted first."),
+            ("fit svr {symbol} {days}", "Fits the support vector regression model to the historical data of the specified symbol. Optionally, specify the number of recent days to use."),
+            ("pred svr {symbol}", "Predicts the next price for the specified symbol using the fitted support vector regression model. Requires the model to be fitted first."),
+            ("fit polyr {symbol} {days}", "Fits the polynomial regression model to the historical data of the specified symbol. Optionally, specify the number of recent days to use."),
+            ("pred polyr {symbol}", "Predicts the next price for the specified symbol using the fitted polynomial regression model. Requires the model to be fitted first."),
+            ("fit dtr {symbol} {days}", "Fits the decision tree regression model to the historical data of the specified symbol. Optionally, specify the number of recent days to use."),
+            ("pred dtr {symbol}", "Predicts the next price for the specified symbol using the fitted decision tree regression model. Requires the model to be fitted first."),
+            ("fit rfr {symbol} {days}", "Fits the random forest regression model to the historical data of the specified symbol. Optionally, specify the number of recent days to use."),
+            ("pred rfr {symbol}", "Predicts the next price for the specified symbol using the fitted random forest regression model. Requires the model to be fitted first."),
         ]
-        return "\n".join(commands)
+        first_column_width = 30
+        max_description_width = 70
+        formatted_commands = []
+        for command, description in commands:
+            wrapped_description_lines = textwrap.wrap(description, width=max_description_width)
+            
+            first_line = f"{command.ljust(first_column_width)}{wrapped_description_lines[0]}"
+            formatted_commands.append(first_line)
+            
+            for additional_line in wrapped_description_lines[1:]:
+                formatted_commands.append(' ' * first_column_width + additional_line)
+
+        return "\n".join(formatted_commands)
     
     def show_historical_data(self, symbol):
         historical_data = self.av.fetch_historical_data(symbol)
@@ -94,6 +116,34 @@ class CommandHandler:
         except requests.exceptions.HTTPError as e:
             return f"Failed to fetch data: Could not connect to the API. Error: {e}"
         
+    def get_price_change_percentage(self, symbol, days=None):
+        try:
+            historical_data = self.av.fetch_historical_data(symbol)
+            sorted_dates = sorted(historical_data.keys())
+
+            if days is None or days >= len(sorted_dates):
+                target_date = sorted_dates[0]
+            else:
+                target_date = sorted_dates[-days - 1]
+            
+            latest_date = sorted_dates[-1]
+            latest_price = float(historical_data[latest_date]["4. close"])
+            target_price = float(historical_data[target_date]["4. close"])
+            percentage_change = ((latest_price - target_price) / target_price) * 100
+
+            return f"The price of {symbol} has changed {percentage_change:.2f}% since {'the beginning' if days is None else f'the last {days} days'}."
+
+        except Exception as e:
+            return f"Failed to calculate price change: {str(e)}"
+        
+    def get_market_cap(self, symbol):
+        market_cap = self.av.fetch_market_capitalization(symbol)
+        return f"Market Capitalization for {symbol}: {int(market_cap):,}"
+    
+    def get_volume(self, symbol):
+        volume = self.av.fetch_real_time_volume(symbol)
+        return f"Today's trading volume for {symbol}: {int(volume):,}"
+        
     def fit_model(self, model_key, symbol, days=None):
         if model_key not in self.models:
             return "Error: Unknown model"
@@ -110,7 +160,7 @@ class CommandHandler:
         day_indices = list(range(len(dates)))
         model = self.models[model_key]
         model.fit(day_indices, list(prices))
-        return f"Fitted {symbol} to the {model_key.upper()} model using the {'last', days, 'days\'' if days else 'entire period\'s'} data..."
+        return f"Fitted {symbol} to the {model_key.upper()} model using the historical data from the {'last ' + str(days) + ' days' if days else 'entire period'}..."
         
     def predict_model(self, model_key, symbol):
         if model_key not in self.models:
