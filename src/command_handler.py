@@ -1,9 +1,8 @@
 import requests
 from alpha_vantage import AlphaVantage
 from machine_learning import (LinearRegressor, SVRRegressor, PolynomialRegressor, 
-                              DecisionTreeRegression, RandomForestRegression)
+                              DecisionTreeRegression, RandomForestRegression, ModelEvaluator)
 from data_processor import DataProcessor
-from datetime import datetime, timedelta
 import textwrap
 
 class CommandHandler:
@@ -143,23 +142,23 @@ class CommandHandler:
     def get_volume(self, symbol):
         volume = self.av.fetch_real_time_volume(symbol)
         return f"Today's trading volume for {symbol}: {int(volume):,}"
-        
+    
     def fit_model(self, model_key, symbol, days=None):
         if model_key not in self.models:
             return "Error: Unknown model"
+                
+        # Fetch and prepare historical data
         historical_data = self.av.fetch_historical_data(symbol=symbol)
-        if days is not None:
-            days = int(days)
-            cutoff_date = datetime.now() - timedelta(days=days)
-            filtered_historical_data = {date: value for date, value in historical_data.items() if datetime.strptime(date, '%Y-%m-%d') >= cutoff_date}
-        else:
-            filtered_historical_data = historical_data
-        dates = list(filtered_historical_data.keys())
-        prices = [value["4. close"] for value in filtered_historical_data.values()]
-        dates, prices = zip(*sorted(zip(dates, prices), key=lambda x: x[0]))
-        day_indices = list(range(len(dates)))
-        model = self.models[model_key]
-        model.fit(day_indices, list(prices))
+        X, y = self.data_preprocessor.prepare_data(historical_data, days)
+        
+        model = self.models[model_key]()
+        
+        # Evaluation
+        evaluator = ModelEvaluator(model, X, y)
+        evaluator.fit_and_evaluate()
+        
+        self.trained_models[model_key] = model
+
         return f"Fitted {symbol} to the {model_key.upper()} model using the historical data from the {'last ' + str(days) + ' days' if days else 'entire period'}..."
         
     def predict_model(self, model_key, symbol):

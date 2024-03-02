@@ -2,7 +2,6 @@ from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QPlainTextEdit,
 from command_handler import CommandHandler
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-from datetime import timedelta
 
 class Terminal(QPlainTextEdit):
     def __init__(self, parent=None):

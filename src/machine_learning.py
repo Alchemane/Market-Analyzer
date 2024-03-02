@@ -3,7 +3,49 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.svm import SVR
-import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+from data_processor import DataProcessor
+from datetime import timedelta
+import numpy as np, datetime
+
+class DataPreprocessor:
+    def __init__(self):
+        self.data_processor = DataProcessor()
+
+    def prepare_data(self, historical_data, days=None):
+        dates, prices = self.data_processor.process_historical_data(historical_data)
+
+        if days is not None:
+            cutoff_date = datetime.now() - timedelta(days=days)
+            filtered_data = {date: value for date, value in historical_data.items() if datetime.strptime(date, '%Y-%m-%d') >= cutoff_date}
+            dates, prices = zip(*[(date, value["4. close"]) for date, value in filtered_data.items()])
+
+        # Convert dates and prices to the format required by your models
+        X, y = self.convert_variables(dates, prices)
+        return X, y
+    
+    def convert_variables(self, dates, prices):
+        start_date = datetime.strptime(dates[0], '%Y-%m-%d')
+        X = [(datetime.strptime(date, '%Y-%m-%d') - start_date).days for date in dates]
+        # Convert X and y into the desired shape for sklearn models
+        X = np.array(X).reshape(-1, 1)
+        y = np.array(prices)
+        return X, y
+
+class ModelEvaluator:
+    def __init__(self, model, X, y, test_size=0.2, random_state=42):
+        self.model = model
+        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
+
+    def fit_and_evaluate(self):
+        self.model.fit(self.X_train, self.y_train)
+        predictions = self.model.predict(self.X_test)
+        mse = mean_squared_error(self.y_test, predictions)
+        print(f"Mean Squared Error: {mse}")
+
+    def predict_new(self, X_new):
+        return self.model.predict(X_new)
 
 class LinearRegressor:
     def __init__(self, **kwargs):
