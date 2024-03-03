@@ -4,48 +4,116 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.svm import SVR
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.preprocessing import StandardScaler
 from data_processor import DataProcessor
 from datetime import timedelta
-import numpy as np, datetime
+from datetime import datetime
+from statsmodels.tsa.arima.model import ARIMA
+from keras import Sequential
+from keras.layers import LSTM, Dense
+import numpy as np, pandas as pd
 
 class DataPreprocessor:
     def __init__(self):
         self.data_processor = DataProcessor()
+        self.scaler = StandardScaler()
+        self.start_date = None
+        self.last_date = None
 
     def prepare_data(self, historical_data, days=None):
         dates, prices = self.data_processor.process_historical_data(historical_data)
-
+        print("Dates sample:", dates[:5])  # Print first 5 dates
+        print("Prices sample:", prices[:5])  # Print first 5 prices
+        self.start_date = datetime.strptime(dates[0], '%Y-%m-%d')
+        self.last_date = datetime.strptime(dates[-1], '%Y-%m-%d')
         if days is not None:
             cutoff_date = datetime.now() - timedelta(days=days)
             filtered_data = {date: value for date, value in historical_data.items() if datetime.strptime(date, '%Y-%m-%d') >= cutoff_date}
             dates, prices = zip(*[(date, value["4. close"]) for date, value in filtered_data.items()])
 
-        # Convert dates and prices to the format required by your models
         X, y = self.convert_variables(dates, prices)
         return X, y
     
     def convert_variables(self, dates, prices):
-        start_date = datetime.strptime(dates[0], '%Y-%m-%d')
-        X = [(datetime.strptime(date, '%Y-%m-%d') - start_date).days for date in dates]
+        X = [(datetime.strptime(date, '%Y-%m-%d') - self.start_date).days for date in dates]
         # Convert X and y into the desired shape for sklearn models
         X = np.array(X).reshape(-1, 1)
-        y = np.array(prices)
+        y = np.array(prices, dtype=float)
+        print("X shape:", X.shape)
+        print("y shape:", y.shape)
+        print("X sample:", X[:5])  # Print first 5 elements of X
+        print("y sample:", y[:5])  # Print first 5 elements of y
         return X, y
+    
+    def prepare_X_new(self):
+        if self.start_date is None:
+            raise ValueError("Start date not set. Please process historical data first.")
+        
+        next_day = self.last_date + timedelta(days=1)
+        day_index_next_day = (next_day - self.start_date).days
+
+        X_new = np.array([day_index_next_day]).reshape(-1, 1)
+        print("X_new:", X_new)
+        return X_new
+    
+    def prepare_X_new_for_lstm(self, historical_data, n_steps=10):        
+        recent_prices = historical_data[-n_steps:]
+                
+        X_new = np.array(recent_prices).reshape(1, n_steps, 1)
+        
+        return X_new
+    
+    # ARIMA and LSTM special cases in data preprocessing
+    def prepare_data_for_arima(self, historical_data, days=None):
+        dates, prices = self.data_processor.process_historical_data(historical_data)
+        if days is not None:
+            pass
+        prices_series = pd.Series(prices, index=pd.to_datetime(dates))
+        return prices_series
+    
+    def prepare_data_for_lstm(self, historical_data, days=None, n_steps=1):
+        _, prices = self.data_processor.process_historical_data(historical_data)
+        prices = self.normalize(prices)
+        # Reshape data for LSTM
+        X, y = [], []
+        for i in range(len(prices) - n_steps):
+            X.append(prices[i:i+n_steps])
+            y.append(prices[i + n_steps])
+        X, y = np.array(X), np.array(y)
+        # Reshape X to [samples, time steps, features]
+        X = X.reshape((X.shape[0], X.shape[1], 1))
+        return X, y
+    
+    def normalize(self, data):
+        if data.ndim == 1:
+            data = data.reshape(-1, 1)
+        normalized_data = self.scaler.fit_transform(data)
+        if normalized_data.shape[1] == 1:
+            normalized_data = normalized_data.ravel()
+        return normalized_data
+    
+class ModelTrainer:
+    def __init__(self, model):
+        self.model = model
+
+    def train_and_split(self, X, y, test_size=0.2, random_state=42):
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
+        self.model.fit(X_train, y_train)
+        return X_test, y_test
 
 class ModelEvaluator:
-    def __init__(self, model, X, y, test_size=0.2, random_state=42):
+    def __init__(self, model):
         self.model = model
-        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
 
-    def fit_and_evaluate(self):
-        self.model.fit(self.X_train, self.y_train)
-        predictions = self.model.predict(self.X_test)
-        mse = mean_squared_error(self.y_test, predictions)
-        print(f"Mean Squared Error: {mse}")
-
-    def predict_new(self, X_new):
-        return self.model.predict(X_new)
+    def evaluate(self, X_test, y_test):
+        predictions = self.model.predict(X_test)
+        mse = mean_squared_error(y_test, predictions)
+        rmse = np.sqrt(mse)
+        mae = mean_absolute_error(y_test, predictions)
+        r2 = r2_score(y_test, predictions)
+        
+        return {"MSE": mse, "RMSE": rmse, "MAE": mae, "R2": r2}
 
 class LinearRegressor:
     def __init__(self, **kwargs):
@@ -146,6 +214,7 @@ class RandomForestRegression:
 
 class MultipleLinearRegressor:
     def __init__(self):
+        # Placeholder class for MLR which is not integrated yet
         self.regressor = LinearRegression()
         self.is_fitted = False
         self.last_day_index = None
@@ -163,3 +232,37 @@ class MultipleLinearRegressor:
             return "Model not fitted. Please fit the model with historical data first."
         X = np.array(X)
         return self.regressor.predict(X)
+    
+class ARIMAModel:
+    def __init__(self, order=(1, 1, 1)):
+        self.order = order
+        self.model = None
+        self.is_fitted = False
+
+    def fit(self, y):
+        self.model = ARIMA(y, order=self.order).fit()
+        self.is_fitted = True
+
+    def predict(self, steps=1):
+        if not self.is_fitted:
+            return "Model not fitted. Please fit the model with historical data first."
+        forecast = self.model.forecast(steps=steps)
+        return forecast
+    
+class LSTMModel:
+    def __init__(self, input_shape):
+        self.model = Sequential([
+            LSTM(50, activation='relu', input_shape=input_shape),
+            Dense(1)
+        ])
+        self.model.compile(optimizer='adam', loss='mse')
+        self.is_fitted = False
+
+    def fit(self, X, y, epochs=20, batch_size=32):
+        self.model.fit(X, y, epochs=epochs, batch_size=batch_size)
+        self.is_fitted = True
+
+    def predict(self, X):
+        if not self.is_fitted:
+            return "Model not fitted. Please fit the model with historical data first."
+        return self.model.predict(X)

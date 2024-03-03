@@ -1,7 +1,8 @@
 import requests
 from alpha_vantage import AlphaVantage
 from machine_learning import (LinearRegressor, SVRRegressor, PolynomialRegressor, 
-                              DecisionTreeRegression, RandomForestRegression, ModelEvaluator)
+                              DecisionTreeRegression, RandomForestRegression, ARIMAModel, LSTMModel, 
+                              ModelEvaluator, ModelTrainer, DataPreprocessor)
 from data_processor import DataProcessor
 import textwrap
 
@@ -10,6 +11,7 @@ class CommandHandler:
         self.main_window = main_window
         self.av = AlphaVantage(api_key=api_key)
         self.data_processor = DataProcessor()
+        self.data_preprocessor = DataPreprocessor()
         self.command_map = {
             "get price": self.get_price,
             "lst cmd": self.get_list_cmd,
@@ -25,10 +27,13 @@ class CommandHandler:
             "dtr": DecisionTreeRegression(),
             "rfr": RandomForestRegression(),
             #: MultipleLinearRegressor(),
+            "arima": ARIMAModel(),
+            #"lstm": LSTMModel(),
         }
+        self.trained_models = {}
         for model_key in self.models.keys():
-            self.command_map[f"fit {model_key}"] = lambda symbol, days=None, mk=model_key: self.fit_model(mk, symbol, days)
-            self.command_map[f"pred {model_key}"] = lambda symbol, mk=model_key: self.predict_model(mk, symbol)
+            self.command_map[f"fit {model_key}"] = lambda symbol, days=None, model_key=model_key: self.fit_model(model_key=model_key, symbol=symbol, days=days)
+            self.command_map[f"pred {model_key}"] = lambda symbol, model_key=model_key: self.predict_model(model_key=model_key, symbol=symbol)
         
     def handle_command(self, command):
         command = command.strip()
@@ -49,13 +54,14 @@ class CommandHandler:
 
         try:
             # Handle commands that require symbol and possibly days
-            if cmd_key in ["fit lr", "fit svr", "fit polyr", "fit dtr", "fit rfr", "pred lr", "pred svr", "pred polyr", "pred dtr", "pred rfr", "get %price"]:
+            if cmd_key in ["fit lr", "fit svr", "fit polyr", "fit dtr", "fit rfr", "fit arima", "fit lstm",
+                            "pred lr", "pred svr", "pred polyr", "pred dtr", "pred rfr", "pred arima", "pred lstm", "get %price"]:
                 if not args:  # Symbol provided?
                     return "Error: Symbol is required."
                 symbol = args[0]
-                days = int(args[1]) if len(args) > 1 else None
+                days = int(args[1]) if len(args) > 1 and cmd_key not in ["fit lstm", "pred lstm"] else None
                 if "fit" in cmd_key or cmd_key == "get %price":
-                    return self.command_map[cmd_key](symbol, days)
+                    return self.command_map[cmd_key](symbol, days) if days is not None else self.command_map[cmd_key](symbol)
                 else:
                     return self.command_map[cmd_key](symbol)
             else:
@@ -81,6 +87,10 @@ class CommandHandler:
             ("pred dtr {symbol}", "Predicts the next price for the specified symbol using the fitted decision tree regression model. Requires the model to be fitted first."),
             ("fit rfr {symbol} {days}", "Fits the random forest regression model to the historical data of the specified symbol. Optionally, specify the number of recent days to use."),
             ("pred rfr {symbol}", "Predicts the next price for the specified symbol using the fitted random forest regression model. Requires the model to be fitted first."),
+            ("fit arima {symbol} {days}", "Fits the Autoregressive integrated moving average model to the historical data of the specified symbol. Optionally, specify the number of recent days to use."),
+            ("pred arima {symbol}", "Predicts the next price for the specified symbol using the fitted Autoregressive integrated moving average model. Requires the model to be fitted first."),
+            ("fit lstm {symbol} {days}", "Fits the Long short-term memory model to the historical data of the specified symbol. Optionally, specify the number of recent days to use."),
+            ("pred lstm {symbol}", "Predicts the next price for the specified symbol using the fitted Long short-term memory model. Requires the model to be fitted first."),
         ]
         first_column_width = 30
         max_description_width = 70
@@ -146,25 +156,40 @@ class CommandHandler:
     def fit_model(self, model_key, symbol, days=None):
         if model_key not in self.models:
             return "Error: Unknown model"
-                
-        # Fetch and prepare historical data
         historical_data = self.av.fetch_historical_data(symbol=symbol)
-        X, y = self.data_preprocessor.prepare_data(historical_data, days)
         
-        model = self.models[model_key]()
-        
-        # Evaluation
-        evaluator = ModelEvaluator(model, X, y)
-        evaluator.fit_and_evaluate()
-        
-        self.trained_models[model_key] = model
+        if model_key == 'arima':
+            data = self.data_preprocessor.prepare_data_for_arima(historical_data, days)
+            model = self.models[model_key]
+            model.fit(data)
+            metrics = "N/A"  # Placeholder for ARIMA metrics
+        elif model_key == 'lstm':
+            X, y = self.data_preprocessor.prepare_data_for_lstm(historical_data, days)
+            input_shape = (X.shape[1], X.shape[2])  # Determine input_shape from prepared data
+            model = LSTMModel(input_shape=input_shape)
+            model.fit(X, y, epochs=100, batch_size=32)
+            metrics = "N/A"  # Placeholder for LSTM metrics
+        else:
+            X, y = self.data_preprocessor.prepare_data(historical_data, days)
+            trainer = ModelTrainer(self.models[model_key])
+            X_test, y_test = trainer.train_and_split(X, y)
+            evaluator = ModelEvaluator(self.models[model_key], X_test, y_test)
+            metrics = evaluator.evaluate()
 
-        return f"Fitted {symbol} to the {model_key.upper()} model using the historical data from the {'last ' + str(days) + ' days' if days else 'entire period'}..."
+        self.trained_models[model_key] = (model, metrics)
+        return f"Fitted {symbol} to the {model_key.upper()} model. Metrics: {metrics}"
         
     def predict_model(self, model_key, symbol):
-        if model_key not in self.models:
-            return "Error: Unknown model"
-        model = self.models[model_key]
-        next_day_index = [[model.last_day_index + 1]]
-        predicted_price = model.predict([[next_day_index]])
-        return f"Predicted price for {symbol} tomorrow using {model_key.upper()} model is {predicted_price[0]}"
+        if model_key not in self.models or model_key not in self.trained_models:
+            return "Error: Model not trained or unknown model"
+        
+        model = self.trained_models[model_key]
+        if model_key == 'lstm':
+            X_new = self.data_preprocessor.prepare_X_new_for_lstm()
+            predicted_price = model.predict(X_new)
+        else:
+            # For ARIMA and other models
+            X_new = self.data_preprocessor.prepare_X_new()
+            predicted_price = model.predict(X_new)
+        
+        return f"Predicted price for {symbol} using {model_key.upper()} model is {predicted_price[0]}"
