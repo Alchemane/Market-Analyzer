@@ -12,7 +12,7 @@ from datetime import datetime
 from statsmodels.tsa.arima.model import ARIMA
 from keras import Sequential
 from keras.layers import LSTM, Dense
-import numpy as np, pandas as pd
+import numpy as np, pandas as pd 
 
 class DataPreprocessor:
     def __init__(self):
@@ -23,8 +23,6 @@ class DataPreprocessor:
 
     def prepare_data(self, historical_data, days=None):
         dates, prices = self.data_processor.process_historical_data(historical_data)
-        print("Dates sample:", dates[:5])  # Print first 5 dates
-        print("Prices sample:", prices[:5])  # Print first 5 prices
         self.start_date = datetime.strptime(dates[0], '%Y-%m-%d')
         self.last_date = datetime.strptime(dates[-1], '%Y-%m-%d')
         if days is not None:
@@ -40,10 +38,6 @@ class DataPreprocessor:
         # Convert X and y into the desired shape for sklearn models
         X = np.array(X).reshape(-1, 1)
         y = np.array(prices, dtype=float)
-        print("X shape:", X.shape)
-        print("y shape:", y.shape)
-        print("X sample:", X[:5])  # Print first 5 elements of X
-        print("y sample:", y[:5])  # Print first 5 elements of y
         return X, y
     
     def prepare_X_new(self):
@@ -57,11 +51,9 @@ class DataPreprocessor:
         print("X_new:", X_new)
         return X_new
     
-    def prepare_X_new_for_lstm(self, historical_data, n_steps=10):        
-        recent_prices = historical_data[-n_steps:]
-                
-        X_new = np.array(recent_prices).reshape(1, n_steps, 1)
-        
+    def prepare_X_new_for_lstm(self, historical_data, n_steps=10):
+        prices_list = [float(value['4. close']) for value in list(historical_data.values())][-n_steps:]
+        X_new = np.array(prices_list).reshape(1, n_steps, 1)
         return X_new
     
     # ARIMA and LSTM special cases in data preprocessing
@@ -86,6 +78,7 @@ class DataPreprocessor:
         return X, y
     
     def normalize(self, data):
+        data = np.array(data)
         if data.ndim == 1:
             data = data.reshape(-1, 1)
         normalized_data = self.scaler.fit_transform(data)
@@ -250,15 +243,21 @@ class ARIMAModel:
         return forecast
     
 class LSTMModel:
-    def __init__(self, input_shape):
+    def __init__(self):
+        self.model = None
+        self.is_fitted = False
+
+    def initialize_model(self, input_shape):
         self.model = Sequential([
             LSTM(50, activation='relu', input_shape=input_shape),
             Dense(1)
         ])
         self.model.compile(optimizer='adam', loss='mse')
-        self.is_fitted = False
 
     def fit(self, X, y, epochs=20, batch_size=32):
+        if not self.model:  # Model not yet initialized
+            input_shape = (X.shape[1], X.shape[2])
+            self.initialize_model(input_shape)
         self.model.fit(X, y, epochs=epochs, batch_size=batch_size)
         self.is_fitted = True
 

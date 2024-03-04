@@ -28,7 +28,7 @@ class CommandHandler:
             "rfr": RandomForestRegression(),
             #: MultipleLinearRegressor(),
             "arima": ARIMAModel(),
-            #"lstm": LSTMModel(),
+            "lstm": LSTMModel(),
         }
         self.trained_models = {}
         for model_key in self.models.keys():
@@ -36,13 +36,14 @@ class CommandHandler:
             self.command_map[f"pred {model_key}"] = lambda symbol, model_key=model_key: self.predict_model(model_key=model_key, symbol=symbol)
         
     def handle_command(self, command):
+        print(f"Received command: {command}")  # Debug print
         command = command.strip()
         parts = command.split()
         cmd_key = ' '.join(parts[:2]) if len(parts) > 1 else parts[0]
-
+        print(f"cmd_key: {cmd_key}")  # Debug print
         if cmd_key == "lst cmd":
             return self.get_list_cmd()
-        
+        print(f"Command map keys: {list(self.command_map.keys())}")  # Debug print
         if cmd_key in self.command_map:
             args = parts[2:] if len(parts) > 2 else []
         else:
@@ -129,7 +130,6 @@ class CommandHandler:
         try:
             historical_data = self.av.fetch_historical_data(symbol)
             sorted_dates = sorted(historical_data.keys())
-
             if days is None or days >= len(sorted_dates):
                 target_date = sorted_dates[0]
             else:
@@ -139,7 +139,6 @@ class CommandHandler:
             latest_price = float(historical_data[latest_date]["4. close"])
             target_price = float(historical_data[target_date]["4. close"])
             percentage_change = ((latest_price - target_price) / target_price) * 100
-
             return f"The price of {symbol} has changed {percentage_change:.2f}% since {'the beginning' if days is None else f'the last {days} days'}."
 
         except Exception as e:
@@ -157,24 +156,22 @@ class CommandHandler:
         if model_key not in self.models:
             return "Error: Unknown model"
         historical_data = self.av.fetch_historical_data(symbol=symbol)
-        
+        model = self.models[model_key]  # Initialize model from the models dictionary
+        metrics = "N/A"
         if model_key == 'arima':
             data = self.data_preprocessor.prepare_data_for_arima(historical_data, days)
-            model = self.models[model_key]
             model.fit(data)
-            metrics = "N/A"  # Placeholder for ARIMA metrics
         elif model_key == 'lstm':
             X, y = self.data_preprocessor.prepare_data_for_lstm(historical_data, days)
-            input_shape = (X.shape[1], X.shape[2])  # Determine input_shape from prepared data
-            model = LSTMModel(input_shape=input_shape)
+            input_shape = X.shape[1:]
+            model.initialize_model(input_shape=input_shape)
             model.fit(X, y, epochs=100, batch_size=32)
-            metrics = "N/A"  # Placeholder for LSTM metrics
         else:
             X, y = self.data_preprocessor.prepare_data(historical_data, days)
-            trainer = ModelTrainer(self.models[model_key])
+            trainer = ModelTrainer(model)
             X_test, y_test = trainer.train_and_split(X, y)
-            evaluator = ModelEvaluator(self.models[model_key], X_test, y_test)
-            metrics = evaluator.evaluate()
+            evaluator = ModelEvaluator(model)
+            metrics = evaluator.evaluate(X_test, y_test)
 
         self.trained_models[model_key] = (model, metrics)
         return f"Fitted {symbol} to the {model_key.upper()} model. Metrics: {metrics}"
@@ -182,10 +179,13 @@ class CommandHandler:
     def predict_model(self, model_key, symbol):
         if model_key not in self.models or model_key not in self.trained_models:
             return "Error: Model not trained or unknown model"
-        
-        model = self.trained_models[model_key]
+        historical_data = self.av.fetch_historical_data(symbol)
+        model, _ = self.trained_models[model_key]
         if model_key == 'lstm':
-            X_new = self.data_preprocessor.prepare_X_new_for_lstm()
+            X_new = self.data_preprocessor.prepare_X_new_for_lstm(historical_data)
+            print(type(X_new))
+            print(X_new)
+            print(X_new.shape)
             predicted_price = model.predict(X_new)
         else:
             # For ARIMA and other models
