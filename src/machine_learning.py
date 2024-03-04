@@ -78,12 +78,22 @@ class DataPreprocessor:
         return X, y
     
     def normalize(self, data):
+        print("Original data:", data)  # Debug print to inspect the original data
         data = np.array(data)
         if data.ndim == 1:
             data = data.reshape(-1, 1)
+        
+        # Check if data is empty after reshaping
+        if data.size == 0:
+            print("Error: Data array is empty after reshaping.")
+            return data  # Or handle the empty case as appropriate
+        
         normalized_data = self.scaler.fit_transform(data)
+        print("Normalized data shape:", normalized_data.shape)  # Debug print to inspect the shape after normalization
+        
         if normalized_data.shape[1] == 1:
             normalized_data = normalized_data.ravel()
+        
         return normalized_data
     
 class ModelTrainer:
@@ -265,3 +275,4 @@ class LSTMModel:
         if not self.is_fitted:
             return "Model not fitted. Please fit the model with historical data first."
         return self.model.predict(X)
+    

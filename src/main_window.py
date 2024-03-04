@@ -1,4 +1,6 @@
-from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QPlainTextEdit, QLineEdit
+from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, 
+                               QPlainTextEdit, QLineEdit, QMenuBar)
+from PySide6.QtGui import QAction
 from command_handler import CommandHandler
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -12,6 +14,21 @@ class Prompt(QLineEdit):
     def __init__(self, parent=None):
         super(Prompt, self).__init__(parent)
         self.setPlaceholderText("lst cmd")
+
+class HamburgerMenu(QMenuBar):
+    def __init__(self, parent=None):
+        super(HamburgerMenu, self).__init__(parent)
+        self.createMenuItems()
+
+    def createMenuItems(self):
+        menu = self.addMenu("☰")
+        settings = QAction('Settings', self)
+        settings.triggered.connect(self.settings_triggered)
+        menu.addAction(settings)
+
+    def settings_triggered(self):
+        print("Settings triggered")
+        # Placeholder
 
 class HistoricalDataPlot(QWidget):
     def __init__(self, dates, prices, parent=None):
@@ -61,6 +78,10 @@ class MainWindow(QMainWindow):
         self.prompt = Prompt()
         self.prompt.returnPressed.connect(self.process_command)
         layout.addWidget(self.prompt)
+
+        # Initialize the hamburger menu
+        self.hamburgerMenu = HamburgerMenu()
+        self.setMenuBar(self.hamburgerMenu)
 
     def applyStyles(self):
         # Apply the stylesheet to the application
@@ -113,6 +134,25 @@ class MainWindow(QMainWindow):
                 padding: 5px;
                 font-size: 12px;
             }
+            QMenuBar {
+                background-color: #1a1a1a;
+                color: #fff;
+            }
+            QMenuBar::item {
+                background-color: #333;
+                color: #fff;
+            }
+            QMenuBar::item:selected {
+                background-color: #555;
+            }
+            QMenu {
+                background-color: #333;
+                color: #fff;
+                border: 1px solid #666;
+            }
+            QMenu::item:selected {
+                background-color: #555;
+            }         
         """)
 
     def process_command(self):
