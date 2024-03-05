@@ -163,7 +163,8 @@ class CommandHandler:
             model.fit(data)
         elif model_key == 'lstm':
             X, y = self.data_preprocessor.prepare_data_for_lstm(historical_data, days)
-            input_shape = X.shape[1:]
+            input_shape = (10, 1)
+            print("Training input_shape:", input_shape)
             model.initialize_model(input_shape=input_shape)
             model.fit(X, y, epochs=100, batch_size=32)
         else:

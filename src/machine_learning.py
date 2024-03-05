@@ -64,7 +64,7 @@ class DataPreprocessor:
         prices_series = pd.Series(prices, index=pd.to_datetime(dates))
         return prices_series
     
-    def prepare_data_for_lstm(self, historical_data, days=None, n_steps=1):
+    def prepare_data_for_lstm(self, historical_data, days=None, n_steps=10):
         _, prices = self.data_processor.process_historical_data(historical_data)
         prices = self.normalize(prices)
         # Reshape data for LSTM
