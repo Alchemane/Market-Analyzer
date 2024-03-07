@@ -155,6 +155,7 @@ class MainWindow(QMainWindow):
             }         
         """)
 
+    # Thread signal related stuff?
     def process_command(self):
         command = self.prompt.text()
         if command:

@@ -4,10 +4,12 @@ from machine_learning import (LinearRegressor, SVRRegressor, PolynomialRegressor
                               DecisionTreeRegression, RandomForestRegression, ARIMAModel, LSTMModel, 
                               ModelEvaluator, ModelTrainer, DataPreprocessor)
 from data_processor import DataProcessor
-import textwrap
+from concurrent.futures import ThreadPoolExecutor
+import textwrap, functools
 
 class CommandHandler:
     def __init__(self, main_window=None, api_key=""):
+        self.executor = ThreadPoolExecutor(max_workers=2)
         self.main_window = main_window
         self.av = AlphaVantage(api_key=api_key)
         self.data_processor = DataProcessor()
@@ -34,16 +36,26 @@ class CommandHandler:
         for model_key in self.models.keys():
             self.command_map[f"fit {model_key}"] = lambda symbol, days=None, model_key=model_key: self.fit_model(model_key=model_key, symbol=symbol, days=days)
             self.command_map[f"pred {model_key}"] = lambda symbol, model_key=model_key: self.predict_model(model_key=model_key, symbol=symbol)
+
+    def run_async(self, func, callback=None, *args, **kwargs):
+        # Submit a function to be executed asynchronously by the ThreadPoolExecutor.
+        if callback:
+            def callback_on_complete(future):
+                self.main_window.queue_function(functools.partial(callback, future.result()))
+            future = self.executor.submit(func, *args, **kwargs)
+            future.add_done_callback(lambda future: callback_on_complete(future))
+        else:
+            return self.executor.submit(func, *args, **kwargs)
         
     def handle_command(self, command):
-        print(f"Received command: {command}")  # Debug print
+        print(f"Received command: {command}")
         command = command.strip()
         parts = command.split()
         cmd_key = ' '.join(parts[:2]) if len(parts) > 1 else parts[0]
-        print(f"cmd_key: {cmd_key}")  # Debug print
+        print(f"cmd_key: {cmd_key}")
         if cmd_key == "lst cmd":
             return self.get_list_cmd()
-        print(f"Command map keys: {list(self.command_map.keys())}")  # Debug print
+        print(f"Command map keys: {list(self.command_map.keys())}")
         if cmd_key in self.command_map:
             args = parts[2:] if len(parts) > 2 else []
         else:
@@ -166,7 +178,7 @@ class CommandHandler:
             input_shape = (10, 1)
             print("Training input_shape:", input_shape)
             model.initialize_model(input_shape=input_shape)
-            model.fit(X, y, epochs=100, batch_size=32)
+            model.fit(X, y, epochs=50, batch_size=32)
         else:
             X, y = self.data_preprocessor.prepare_data(historical_data, days)
             trainer = ModelTrainer(model)

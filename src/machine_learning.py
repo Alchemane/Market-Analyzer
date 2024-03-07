@@ -93,7 +93,7 @@ class DataPreprocessor:
         
         if normalized_data.shape[1] == 1:
             normalized_data = normalized_data.ravel()
-        
+            print(normalized_data)
         return normalized_data
     
 class ModelTrainer:
