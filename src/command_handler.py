@@ -47,42 +47,30 @@ class CommandHandler:
         else:
             return self.executor.submit(func, *args, **kwargs)
         
+    def result_callback(self, result):
+        self.main_window.update_signal.emit(result)
+        
     def handle_command(self, command):
-        print(f"Received command: {command}")
         command = command.strip()
         parts = command.split()
         cmd_key = ' '.join(parts[:2]) if len(parts) > 1 else parts[0]
-        print(f"cmd_key: {cmd_key}")
-        if cmd_key == "lst cmd":
-            return self.get_list_cmd()
-        print(f"Command map keys: {list(self.command_map.keys())}")
+        args = parts[2:] if len(parts) > 2 else []
         if cmd_key in self.command_map:
-            args = parts[2:] if len(parts) > 2 else []
-        else:
-            cmd_key = parts[0]
-            args = parts[1:] if len(parts) > 1 else []
-
-        if cmd_key not in self.command_map:
-            return "Unknown command"
-
-        try:
-            # Handle commands that require symbol and possibly days
-            if cmd_key in ["fit lr", "fit svr", "fit polyr", "fit dtr", "fit rfr", "fit arima", "fit lstm",
-                            "pred lr", "pred svr", "pred polyr", "pred dtr", "pred rfr", "pred arima", "pred lstm", "get %price"]:
-                if not args:  # Symbol provided?
-                    return "Error: Symbol is required."
-                symbol = args[0]
-                days = int(args[1]) if len(args) > 1 and cmd_key not in ["fit lstm", "pred lstm"] else None
-                if "fit" in cmd_key or cmd_key == "get %price":
-                    return self.command_map[cmd_key](symbol, days) if days is not None else self.command_map[cmd_key](symbol)
-                else:
-                    return self.command_map[cmd_key](symbol)
+            command_func = self.command_map[cmd_key]
+            if 'callback' in command_func.__code__.co_varnames:
+                prepared_func = functools.partial(command_func, *args, callback=self.result_callback)
             else:
-                return self.command_map[cmd_key](*args)
-        except ValueError as e:
-            return f"Error: {str(e)}"
+                prepared_func = functools.partial(command_func, *args)
 
-    def get_list_cmd(self):
+            self.run_async(prepared_func)
+        else:
+            if cmd_key == "lst cmd":
+                result = self.get_list_cmd()
+                self.result_callback(result)
+            else:
+                self.result_callback("Unknown command")
+
+    def get_list_cmd(self, callback=None):
         commands = [
             ("lst cmd", "Lists all available commands."),
             ("get price {symbol}", "Returns the current price of the specified symbol."),
@@ -117,28 +105,34 @@ class CommandHandler:
             for additional_line in wrapped_description_lines[1:]:
                 formatted_commands.append(' ' * first_column_width + additional_line)
 
-        return "\n".join(formatted_commands)
+        if callback:
+            callback(result="\n".join(formatted_commands))
     
-    def show_historical_data(self, symbol):
+    def show_historical_data(self, symbol, callback=None):
         historical_data = self.av.fetch_historical_data(symbol)
         dates, prices = self.data_processor.process_historical_data(historical_data)
 
         dates.reverse()
         prices.reverse()
         self.main_window.show_historical_data(dates, prices)
-        return "Displaying historical data..."
+        if callback:
+            callback(result="Displaying historical data...")
     
-    def get_price(self, symbol):
+    def get_price(self, symbol, callback=None):
+        result = None
         try:
             price = self.av.fetch_real_time_price(symbol=symbol)
             if price is not None:
-                return f"Price of {symbol} is {price}"
+                result =  f"Price of {symbol} is {price}"
             else:
-                return f"Failed to fetch data: '{symbol}' not recognized, data unavailable, or API limit of 25 calls has been reached."
+                result =  f"Failed to fetch data: '{symbol}' not recognized, data unavailable, or API limit of 25 calls has been reached."
         except requests.exceptions.HTTPError as e:
-            return f"Failed to fetch data: Could not connect to the API. Error: {e}"
+            result =  f"Failed to fetch data: Could not connect to the API. Error: {e}"
+        if callback:
+            callback(result)
         
-    def get_price_change_percentage(self, symbol, days=None):
+    def get_price_change_percentage(self, symbol, days=None, callback=None):
+        result = None
         try:
             historical_data = self.av.fetch_historical_data(symbol)
             sorted_dates = sorted(historical_data.keys())
@@ -151,58 +145,71 @@ class CommandHandler:
             latest_price = float(historical_data[latest_date]["4. close"])
             target_price = float(historical_data[target_date]["4. close"])
             percentage_change = ((latest_price - target_price) / target_price) * 100
-            return f"The price of {symbol} has changed {percentage_change:.2f}% since {'the beginning' if days is None else f'the last {days} days'}."
+            result =  f"The price of {symbol} has changed {percentage_change:.2f}% since {'the beginning' if days is None else f'the last {days} days'}."
 
         except Exception as e:
-            return f"Failed to calculate price change: {str(e)}"
+            result = f"Failed to calculate price change: {str(e)}"
+        if callback:
+            callback(result)
         
-    def get_market_cap(self, symbol):
+    def get_market_cap(self, symbol, callback=None):
         market_cap = self.av.fetch_market_capitalization(symbol)
-        return f"Market Capitalization for {symbol}: {int(market_cap):,}"
+        if callback:
+            callback(result=f"Market Capitalization for {symbol}: {int(market_cap):,}")
     
-    def get_volume(self, symbol):
+    def get_volume(self, symbol, callback=None):
         volume = self.av.fetch_real_time_volume(symbol)
-        return f"Today's trading volume for {symbol}: {int(volume):,}"
+        if callback:
+            callback(result=f"Today's trading volume for {symbol}: {int(volume):,}")
     
-    def fit_model(self, model_key, symbol, days=None):
+    def fit_model(self, model_key, symbol, days=None, callback=None):
+        result = None
         if model_key not in self.models:
-            return "Error: Unknown model"
-        historical_data = self.av.fetch_historical_data(symbol=symbol)
-        model = self.models[model_key]  # Initialize model from the models dictionary
-        metrics = "N/A"
-        if model_key == 'arima':
-            data = self.data_preprocessor.prepare_data_for_arima(historical_data, days)
-            model.fit(data)
-        elif model_key == 'lstm':
-            X, y = self.data_preprocessor.prepare_data_for_lstm(historical_data, days)
-            input_shape = (10, 1)
-            print("Training input_shape:", input_shape)
-            model.initialize_model(input_shape=input_shape)
-            model.fit(X, y, epochs=50, batch_size=32)
+            result = "Error: Unknown model"
         else:
-            X, y = self.data_preprocessor.prepare_data(historical_data, days)
-            trainer = ModelTrainer(model)
-            X_test, y_test = trainer.train_and_split(X, y)
-            evaluator = ModelEvaluator(model)
-            metrics = evaluator.evaluate(X_test, y_test)
+            historical_data = self.av.fetch_historical_data(symbol=symbol)
+            model = self.models[model_key]  # Initialize model from the models dictionary
+            metrics = "N/A"
+            if model_key == 'arima':
+                data = self.data_preprocessor.prepare_data_for_arima(historical_data, days)
+                model.fit(data)
+            elif model_key == 'lstm':
+                X, y = self.data_preprocessor.prepare_data_for_lstm(historical_data, days)
+                input_shape = (10, 1)
+                print("Training input_shape:", input_shape) # ARGH
+                model.initialize_model(input_shape=input_shape)
+                model.fit(X, y, epochs=50, batch_size=32)
+            else:
+                X, y = self.data_preprocessor.prepare_data(historical_data, days)
+                trainer = ModelTrainer(model)
+                X_test, y_test = trainer.train_and_split(X, y)
+                evaluator = ModelEvaluator(model)
+                metrics = evaluator.evaluate(X_test, y_test)
 
-        self.trained_models[model_key] = (model, metrics)
-        return f"Fitted {symbol} to the {model_key.upper()} model. Metrics: {metrics}"
+            self.trained_models[model_key] = (model, metrics)
+            result = f"Fitted {symbol} to the {model_key.upper()} model. Metrics: {metrics}"
+        print("Fitting model, about to invoke callback")
+        if callback:
+            callback(result)
         
-    def predict_model(self, model_key, symbol):
+    def predict_model(self, model_key, symbol, callback=None):
+        result=None
         if model_key not in self.models or model_key not in self.trained_models:
-            return "Error: Model not trained or unknown model"
-        historical_data = self.av.fetch_historical_data(symbol)
-        model, _ = self.trained_models[model_key]
-        if model_key == 'lstm':
-            X_new = self.data_preprocessor.prepare_X_new_for_lstm(historical_data)
-            print(type(X_new))
-            print(X_new)
-            print(X_new.shape)
-            predicted_price = model.predict(X_new)
+            result = "Error: Model not trained or unknown model"
         else:
-            # For ARIMA and other models
-            X_new = self.data_preprocessor.prepare_X_new()
-            predicted_price = model.predict(X_new)
-        
-        return f"Predicted price for {symbol} using {model_key.upper()} model is {predicted_price[0]}"
+            historical_data = self.av.fetch_historical_data(symbol)
+            model, _ = self.trained_models[model_key]
+            if model_key == 'lstm':
+                X_new = self.data_preprocessor.prepare_X_new_for_lstm(historical_data)
+                print(type(X_new))
+                print(X_new)
+                print(X_new.shape)
+                predicted_price = model.predict(X_new)
+            else:
+                # For ARIMA and other models
+                X_new = self.data_preprocessor.prepare_X_new()
+                predicted_price = model.predict(X_new)
+            
+            result = f"Predicted price for {symbol} using {model_key.upper()} model is {predicted_price[0]}"
+        if callback:
+            callback(result)

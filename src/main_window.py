@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, 
                                QPlainTextEdit, QLineEdit, QMenuBar)
 from PySide6.QtGui import QAction
+from PySide6.QtCore import Signal
 from command_handler import CommandHandler
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -51,6 +52,8 @@ class HistoricalDataPlot(QWidget):
         self.canvas.draw()
 
 class MainWindow(QMainWindow):
+    update_signal = Signal(str)
+
     def __init__(self, api_key):
         super().__init__()
         self.setWindowTitle("Market Analyzer")
@@ -58,6 +61,7 @@ class MainWindow(QMainWindow):
         self.command_handler = CommandHandler(main_window=self, api_key=api_key)
         self.initUI()
         self.applyStyles()
+        self.update_signal.connect(self.update_terminal)
 
     def initUI(self):
         central_widget = QWidget(self)
@@ -104,12 +108,10 @@ class MainWindow(QMainWindow):
                 width: 14px;
                 margin: 14px 0 14px 0;
             }
-
             QScrollBar::handle:vertical {
                 background-color: #3a393a;
                 min-height: 30px;
             }
-
             QScrollBar::add-line:vertical {
                 border: none;
                 background: none;
@@ -159,9 +161,14 @@ class MainWindow(QMainWindow):
     def process_command(self):
         command = self.prompt.text()
         if command:
-            result = self.command_handler.handle_command(command)
-            self.terminal.appendPlainText(f"> {command}\n{result}")
+            self.terminal.appendPlainText(f"> {command}\nProcessing...")
             self.prompt.clear()
+            # Trigger asynchronous handling in the CommandHandler.
+            self.command_handler.handle_command(command)
+
+    def update_terminal(self, result):
+        self.terminal.appendPlainText(f"> {result}")
+        self.prompt.clear()
 
     def show_historical_data(self, dates, prices):
         self.graph.plot(dates, prices)

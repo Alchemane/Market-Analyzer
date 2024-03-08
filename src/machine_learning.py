@@ -48,7 +48,6 @@ class DataPreprocessor:
         day_index_next_day = (next_day - self.start_date).days
 
         X_new = np.array([day_index_next_day]).reshape(-1, 1)
-        print("X_new:", X_new)
         return X_new
     
     def prepare_X_new_for_lstm(self, historical_data, n_steps=10):
