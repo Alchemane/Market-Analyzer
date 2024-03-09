@@ -1,10 +1,13 @@
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, 
-                               QPlainTextEdit, QLineEdit, QMenuBar)
+                               QPlainTextEdit, QLineEdit, QMenuBar, QDialog, QPushButton, 
+                               QFormLayout, QSpinBox, QDoubleSpinBox, QComboBox)
 from PySide6.QtGui import QAction
 from PySide6.QtCore import Signal
 from command_handler import CommandHandler
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+from settings import Settings
+settings = Settings()
 
 class Terminal(QPlainTextEdit):
     def __init__(self, parent=None):
@@ -17,19 +20,164 @@ class Prompt(QLineEdit):
         self.setPlaceholderText("lst cmd")
 
 class HamburgerMenu(QMenuBar):
+    openSettingsDialog = Signal()
+
     def __init__(self, parent=None):
         super(HamburgerMenu, self).__init__(parent)
         self.createMenuItems()
 
     def createMenuItems(self):
         menu = self.addMenu("☰")
-        settings = QAction('Settings', self)
-        settings.triggered.connect(self.settings_triggered)
-        menu.addAction(settings)
+        settingsAction = QAction('Settings', self)
+        settingsAction.triggered.connect(self.onSettingsTriggered)
+        menu.addAction(settingsAction)
 
-    def settings_triggered(self):
-        print("Settings triggered")
-        # Placeholder
+    def onSettingsTriggered(self):
+        self.openSettingsDialog.emit()
+
+class SettingsDialog(QDialog):
+    def __init__(self, main_window, parent=None):
+        super(SettingsDialog, self).__init__(parent)
+        self.main_window = main_window
+        self.setWindowTitle('Settings')
+        self.layout = QVBoxLayout(self)
+        self.formLayout = QFormLayout()
+        self.init_widgets()
+        self.saveButton = QPushButton('Save')
+        self.saveButton.clicked.connect(self.save_settings)
+        self.layout.addLayout(self.formLayout)
+        self.layout.addWidget(self.saveButton)
+
+    def init_widgets(self):
+        # Default Days
+        self.default_days_widget = QSpinBox()
+        self.default_days_widget.setValue(settings.default_days)
+        self.formLayout.addRow("Default Days:", self.default_days_widget)
+
+        # Watching Ticker
+        self.watching_ticker_widget = QLineEdit()
+        self.watching_ticker_widget.setText(settings.watching_ticker)
+        self.formLayout.addRow("Watching Ticker:", self.watching_ticker_widget)
+
+        # Test Size
+        self.test_size_widget = QDoubleSpinBox()
+        self.test_size_widget.setSingleStep(0.01)
+        self.test_size_widget.setValue(settings.test_size)
+        self.formLayout.addRow("Test Size:", self.test_size_widget)
+
+        # Random State
+        self.random_state_widget = QSpinBox()
+        self.random_state_widget.setValue(settings.random_state)
+        self.formLayout.addRow("Random State:", self.random_state_widget)
+
+        # Poly Degree
+        self.poly_degree_widget = QSpinBox()
+        self.poly_degree_widget.setValue(settings.poly_degree)
+        self.formLayout.addRow("Poly Degree:", self.poly_degree_widget)
+
+        # SVR Kernel
+        self.svr_kernel_widget = QComboBox()
+        self.svr_kernel_widget.addItems(['linear', 'poly', 'rbf', 'sigmoid'])
+        self.svr_kernel_widget.setCurrentText(settings.svr_kernel)
+        self.formLayout.addRow("SVR Kernel:", self.svr_kernel_widget)
+
+        # SVR C
+        self.svr_c_widget = QDoubleSpinBox()
+        self.svr_c_widget.setMaximum(1000)
+        self.svr_c_widget.setValue(settings.svr_c)
+        self.formLayout.addRow("SVR C:", self.svr_c_widget)
+
+        # SVR Gamma
+        self.svr_gamma_widget = QLineEdit()
+        self.svr_gamma_widget.setText(settings.svr_gamma)
+        self.formLayout.addRow("SVR Gamma:", self.svr_gamma_widget)
+
+        # RFR N Estimators
+        self.rfr_n_estimators_widget = QSpinBox()
+        self.rfr_n_estimators_widget.setMaximum(1000)
+        self.rfr_n_estimators_widget.setValue(int(settings.rfr_n_estimators))
+        self.formLayout.addRow("RFR N Estimators:", self.rfr_n_estimators_widget)
+
+        # ARIMA Steps
+        self.arima_steps_widget = QSpinBox()
+        self.arima_steps_widget.setValue(settings.arima_steps)
+        self.formLayout.addRow("ARIMA Steps:", self.arima_steps_widget)
+
+        # ARIMA Order
+        self.arima_order_widget = QLineEdit()
+        self.arima_order_widget.setText(str(settings.arima_order))
+        self.formLayout.addRow("ARIMA Order:", self.arima_order_widget)
+
+        # LSTM Units
+        self.lstm_units_widget = QSpinBox()
+        self.lstm_units_widget.setMaximum(1000)
+        self.lstm_units_widget.setValue(settings.lstm_units)
+        self.formLayout.addRow("LSTM Units:", self.lstm_units_widget)
+
+        # LSTM Activation
+        self.lstm_activation_widget = QComboBox()
+        self.lstm_activation_widget.addItems(['relu', 'sigmoid', 'tanh', 'linear'])
+        self.lstm_activation_widget.setCurrentText(settings.lstm_activation)
+        self.formLayout.addRow("LSTM Activation:", self.lstm_activation_widget)
+
+        # LSTM Dense
+        self.lstm_dense = QSpinBox()
+        self.lstm_dense.setValue(settings.lstm_dense)
+        self.formLayout.addRow("LSTM Dense:", self.lstm_dense)
+
+        # LSTM Optimizer
+        self.lstm_optimizer = QComboBox()
+        self.lstm_optimizer.addItems(['adam', 'sgd', 'rmsprop', 'adamax'])
+        self.lstm_optimizer.setCurrentText(settings.lstm_optimizer)
+        self.formLayout.addRow("LSTM Optimizer:", self.lstm_optimizer)
+
+        # LSTM Loss
+        self.lstm_loss = QComboBox()
+        self.lstm_loss.addItems(['mse', 'mae', 'logcosh', 'cosine_similarity'])
+        self.lstm_loss.setCurrentText(settings.lstm_loss)
+        self.formLayout.addRow("LSTM Loss:", self.lstm_loss)
+
+        # LSTM Epochs
+        self.lstm_epochs = QSpinBox()
+        self.lstm_epochs.setMaximum(1000)  # Adjust maximum as needed
+        self.lstm_epochs.setValue(settings.lstm_epochs)
+        self.formLayout.addRow("LSTM Epochs:", self.lstm_epochs)
+
+        # LSTM Batch Size
+        self.lstm_batch_size = QSpinBox()
+        self.lstm_batch_size.setMaximum(1000)  # Adjust maximum as needed
+        self.lstm_batch_size.setValue(settings.lstm_batch_size)
+        self.formLayout.addRow("LSTM Batch Size:", self.lstm_batch_size)
+
+        # LSTM Input Shape
+        self.lstm_input_shape = QLineEdit()
+        self.lstm_input_shape.setText(str(settings.lstm_input_shape))
+        self.formLayout.addRow("LSTM Input Shape:", self.lstm_input_shape)
+        
+    def save_settings(self):
+        settings.default_days = self.default_days_widget.value()
+        settings.watching_ticker = self.watching_ticker_widget.text()
+        settings.test_size = self.test_size_widget.value()
+        settings.random_state = self.random_state_widget.value()
+        settings.poly_degree = self.poly_degree_widget.value()
+        settings.svr_kernel = self.svr_kernel_widget.currentText()
+        settings.svr_c = self.svr_c_widget.value()
+        settings.svr_gamma = self.svr_gamma_widget.text()
+        settings.rfr_n_estimators = self.rfr_n_estimators_widget.value()
+        settings.arima_steps = self.arima_steps_widget.value()
+        settings.arima_order = eval(self.arima_order_widget.text())
+        settings.lstm_units = self.lstm_units_widget.value()
+        settings.lstm_activation = self.lstm_activation_widget.currentText()
+        settings.lstm_dense = self.lstm_dense.value()
+        settings.lstm_optimizer = self.lstm_optimizer.currentText()
+        settings.lstm_loss = self.lstm_loss.currentText()
+        settings.lstm_epochs = self.lstm_epochs.value()
+        settings.lstm_batch_size = self.lstm_batch_size.value()
+        settings.lstm_input_shape = eval(self.lstm_input_shape.text())
+
+        settings.save_settings()
+        self.main_window.notify_terminal("Settings Saved!")
+        self.accept()
 
 class HistoricalDataPlot(QWidget):
     def __init__(self, dates, prices, parent=None):
@@ -62,6 +210,7 @@ class MainWindow(QMainWindow):
         self.initUI()
         self.applyStyles()
         self.update_signal.connect(self.update_terminal)
+        self.hamburgerMenu.openSettingsDialog.connect(self.showSettingsDialog)
 
     def initUI(self):
         central_widget = QWidget(self)
@@ -76,7 +225,7 @@ class MainWindow(QMainWindow):
         # Initialize the terminal
         self.terminal = Terminal()
         layout.addWidget(self.terminal)
-        self.terminal.appendPlainText(f"> Welcome to the Market Analyzer tool. Plug in 'lst cmd' for a list of all commands.")
+        self.terminal.appendPlainText(f"> Welcome to the Market Analyzer tool. Plug in 'lst cmd' for a list of all commands. Exercise caution when overriding default settings.")
 
         # Initialize the prompt
         self.prompt = Prompt()
@@ -173,3 +322,10 @@ class MainWindow(QMainWindow):
     def show_historical_data(self, dates, prices):
         self.graph.plot(dates, prices)
         self.graph.show()
+
+    def showSettingsDialog(self):
+        dialog = SettingsDialog(self)
+        dialog.exec_()
+
+    def notify_terminal(self, message):
+        self.update_signal.emit(message)

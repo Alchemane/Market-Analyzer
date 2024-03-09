@@ -5,7 +5,9 @@ from machine_learning import (LinearRegressor, SVRRegressor, PolynomialRegressor
                               ModelEvaluator, ModelTrainer, DataPreprocessor)
 from data_processor import DataProcessor
 from concurrent.futures import ThreadPoolExecutor
+from settings import Settings
 import textwrap, functools
+settings=Settings()
 
 class CommandHandler:
     def __init__(self, main_window=None, api_key=""):
@@ -34,8 +36,8 @@ class CommandHandler:
         }
         self.trained_models = {}
         for model_key in self.models.keys():
-            self.command_map[f"fit {model_key}"] = lambda symbol, days=None, model_key=model_key: self.fit_model(model_key=model_key, symbol=symbol, days=days)
-            self.command_map[f"pred {model_key}"] = lambda symbol, model_key=model_key: self.predict_model(model_key=model_key, symbol=symbol)
+            self.command_map[f"fit {model_key}"] = lambda symbol, days=None, model_key=model_key, callback=self.result_callback: self.fit_model(model_key=model_key, symbol=symbol, days=days, callback=callback)
+            self.command_map[f"pred {model_key}"] = lambda symbol, model_key=model_key, callback=self.result_callback: self.predict_model(model_key=model_key, symbol=symbol, callback=callback)
 
     def run_async(self, func, callback=None, *args, **kwargs):
         # Submit a function to be executed asynchronously by the ThreadPoolExecutor.
@@ -108,18 +110,16 @@ class CommandHandler:
         if callback:
             callback(result="\n".join(formatted_commands))
     
-    def show_historical_data(self, symbol, callback=None):
+    def show_historical_data(self, symbol=None or settings.watching_ticker, callback=None):
         historical_data = self.av.fetch_historical_data(symbol)
         dates, prices = self.data_processor.process_historical_data(historical_data)
-
         dates.reverse()
         prices.reverse()
         self.main_window.show_historical_data(dates, prices)
         if callback:
             callback(result="Displaying historical data...")
     
-    def get_price(self, symbol, callback=None):
-        result = None
+    def get_price(self, symbol=None or settings.watching_ticker, callback=None):
         try:
             price = self.av.fetch_real_time_price(symbol=symbol)
             if price is not None:
@@ -131,7 +131,7 @@ class CommandHandler:
         if callback:
             callback(result)
         
-    def get_price_change_percentage(self, symbol, days=None, callback=None):
+    def get_price_change_percentage(self, symbol=None or settings.watching_ticker, days=None or settings.default_days, callback=None):
         result = None
         try:
             historical_data = self.av.fetch_historical_data(symbol)
@@ -152,18 +152,19 @@ class CommandHandler:
         if callback:
             callback(result)
         
-    def get_market_cap(self, symbol, callback=None):
+    def get_market_cap(self, symbol=None or settings.watching_ticker, callback=None):
         market_cap = self.av.fetch_market_capitalization(symbol)
         if callback:
             callback(result=f"Market Capitalization for {symbol}: {int(market_cap):,}")
     
-    def get_volume(self, symbol, callback=None):
+    def get_volume(self, symbol=None, callback=None):
+        symbol=symbol or settings.watching_ticker
         volume = self.av.fetch_real_time_volume(symbol)
         if callback:
             callback(result=f"Today's trading volume for {symbol}: {int(volume):,}")
     
-    def fit_model(self, model_key, symbol, days=None, callback=None):
-        result = None
+    def fit_model(self, model_key, symbol=None or settings.watching_ticker, 
+                  days=None or settings.default_days, callback=None):
         if model_key not in self.models:
             result = "Error: Unknown model"
         else:
@@ -175,10 +176,10 @@ class CommandHandler:
                 model.fit(data)
             elif model_key == 'lstm':
                 X, y = self.data_preprocessor.prepare_data_for_lstm(historical_data, days)
-                input_shape = (10, 1)
+                input_shape = settings.lstm_input_shape
                 print("Training input_shape:", input_shape) # ARGH
                 model.initialize_model(input_shape=input_shape)
-                model.fit(X, y, epochs=50, batch_size=32)
+                model.fit(X, y, epochs=settings.lstm_epochs, batch_size=settings.lstm_batch_size)
             else:
                 X, y = self.data_preprocessor.prepare_data(historical_data, days)
                 trainer = ModelTrainer(model)
@@ -192,8 +193,7 @@ class CommandHandler:
         if callback:
             callback(result)
         
-    def predict_model(self, model_key, symbol, callback=None):
-        result=None
+    def predict_model(self, model_key, symbol=None or settings.watching_ticker, callback=None):
         if model_key not in self.models or model_key not in self.trained_models:
             result = "Error: Model not trained or unknown model"
         else:

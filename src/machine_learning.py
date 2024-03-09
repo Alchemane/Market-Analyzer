@@ -12,7 +12,9 @@ from datetime import datetime
 from statsmodels.tsa.arima.model import ARIMA
 from keras import Sequential
 from keras.layers import LSTM, Dense
-import numpy as np, pandas as pd 
+from settings import Settings
+import numpy as np, pandas as pd
+settings = Settings()
 
 class DataPreprocessor:
     def __init__(self):
@@ -63,7 +65,7 @@ class DataPreprocessor:
         prices_series = pd.Series(prices, index=pd.to_datetime(dates))
         return prices_series
     
-    def prepare_data_for_lstm(self, historical_data, days=None, n_steps=10):
+    def prepare_data_for_lstm(self, historical_data, days=None, n_steps=10): # Days experimental
         _, prices = self.data_processor.process_historical_data(historical_data)
         prices = self.normalize(prices)
         # Reshape data for LSTM
@@ -99,7 +101,7 @@ class ModelTrainer:
     def __init__(self, model):
         self.model = model
 
-    def train_and_split(self, X, y, test_size=0.2, random_state=42):
+    def train_and_split(self, X, y, test_size=settings.test_size, random_state=settings.random_state):
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
         self.model.fit(X_train, y_train)
         return X_test, y_test
@@ -137,7 +139,7 @@ class LinearRegressor:
         return self.regressor.predict(X)
     
 class PolynomialRegressor:
-    def __init__(self, degree=2, **kwargs):
+    def __init__(self, degree=settings.poly_degree, **kwargs):
         self.degree = degree
         self.poly_features = PolynomialFeatures(degree=self.degree)
         self.regressor = LinearRegression(**kwargs)
@@ -158,7 +160,7 @@ class PolynomialRegressor:
         return self.regressor.predict(X_poly)
 
 class SVRRegressor:
-    def __init__(self, kernel='rbf', C=100, gamma='auto'):
+    def __init__(self, kernel=settings.svr_kernel, C=settings.svr_c, gamma=settings.svr_gamma):
         self.regressor = SVR(kernel=kernel, C=C, gamma=gamma)
         self.is_fitted = False
         self.last_day_index = None
@@ -177,7 +179,7 @@ class SVRRegressor:
         return self.regressor.predict(X)
     
 class DecisionTreeRegression:
-    def __init__(self, random_state=42):
+    def __init__(self, random_state=settings.random_state):
         self.regressor = DecisionTreeRegressor(random_state=random_state)
         self.is_fitted = False
         self.last_day_index = None
@@ -196,7 +198,7 @@ class DecisionTreeRegression:
         return self.regressor.predict(X)
 
 class RandomForestRegression:
-    def __init__(self, n_estimators=100, random_state=42):
+    def __init__(self, n_estimators=settings.rfr_n_estimators, random_state=settings.random_state):
         self.regressor = RandomForestRegressor(n_estimators=n_estimators, random_state=random_state)
         self.is_fitted = False
         self.last_day_index = None
@@ -236,7 +238,7 @@ class MultipleLinearRegressor:
         return self.regressor.predict(X)
     
 class ARIMAModel:
-    def __init__(self, order=(1, 1, 1)):
+    def __init__(self, order=settings.arima_order):
         self.order = order
         self.model = None
         self.is_fitted = False
@@ -258,12 +260,12 @@ class LSTMModel:
 
     def initialize_model(self, input_shape):
         self.model = Sequential([
-            LSTM(50, activation='relu', input_shape=input_shape),
-            Dense(1)
+            LSTM(settings.lstm_units, activation=settings.lstm_activation, input_shape=input_shape),
+            Dense(settings.lstm_dense)
         ])
-        self.model.compile(optimizer='adam', loss='mse')
+        self.model.compile(optimizer=settings.lstm_optimizer, loss=settings.lstm_loss)
 
-    def fit(self, X, y, epochs=20, batch_size=32):
+    def fit(self, X, y, epochs=settings.lstm_epochs, batch_size=settings.lstm_batch_size):
         if not self.model:  # Model not yet initialized
             input_shape = (X.shape[1], X.shape[2])
             self.initialize_model(input_shape)
