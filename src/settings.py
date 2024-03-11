@@ -1,6 +1,13 @@
 import json
 
-class Settings:
+class SingletonMeta(type):
+    _instances = {}
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super().__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+class Settings(metaclass=SingletonMeta):
     def __init__(self):
         # Default settings
         self.default_days = 30
@@ -17,13 +24,15 @@ class Settings:
         self.arima_steps = 1
         self.arima_order = (1, 1, 1)
         self.lstm_units = 50
-        self.lstm_activation = 'relu'
+        self.lstm_activation = 'sigmoid'
         self.lstm_dense = 1
         self.lstm_optimizer = 'adam'
         self.lstm_loss = 'mse'
         self.lstm_epochs = 50
         self.lstm_batch_size = 32
         self.lstm_input_shape = (10, 1)
+
+        self.settings_dict = None
 
     def to_dict(self):
         return {
@@ -58,14 +67,18 @@ class Settings:
     def load_settings(self):
         try:
             with open('settings.json', 'r') as file:
-                settings_dict = json.load(file)
-                for key, value in settings_dict.items():
+                self.settings_dict = json.load(file)
+                for key, value in self.settings_dict.items():
                     setattr(self, key, value)
+                    print("json values: ", key, value)
+                print(self.settings_dict)
         except FileNotFoundError:
             print("Settings file not found. Using default settings.")
 
-    def save_settings(self):
-        settings_dict = self.to_dict()
-        with open('settings.json', 'w') as file:
-            json.dump(settings_dict, file, indent=4)
+    def get_settings(self):
+        return self.settings_dict
 
+    def save_settings(self):
+        self.settings_dict = self.to_dict()
+        with open('settings.json', 'w') as file:
+            json.dump(self.settings_dict, file, indent=4)

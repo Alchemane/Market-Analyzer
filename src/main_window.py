@@ -1,13 +1,14 @@
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, 
                                QPlainTextEdit, QLineEdit, QMenuBar, QDialog, QPushButton, 
                                QFormLayout, QSpinBox, QDoubleSpinBox, QComboBox)
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtCore import Signal
 from command_handler import CommandHandler
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from settings import Settings
 settings = Settings()
+import os
 
 class Terminal(QPlainTextEdit):
     def __init__(self, parent=None):
@@ -47,6 +48,7 @@ class SettingsDialog(QDialog):
         self.saveButton.clicked.connect(self.save_settings)
         self.layout.addLayout(self.formLayout)
         self.layout.addWidget(self.saveButton)
+        self.settings = Settings()
 
     def init_widgets(self):
         # Default Days
@@ -203,7 +205,10 @@ class MainWindow(QMainWindow):
     update_signal = Signal(str)
 
     def __init__(self, api_key):
-        super().__init__()
+        super().__init__()        
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        icon_path = os.path.join(base_dir, '..', 'resources', 'window-icon.png')
+        self.setWindowIcon(QIcon(icon_path))
         self.setWindowTitle("Market Analyzer")
         self.setGeometry(100, 100, 800, 600)
         self.command_handler = CommandHandler(main_window=self, api_key=api_key)
@@ -211,6 +216,7 @@ class MainWindow(QMainWindow):
         self.applyStyles()
         self.update_signal.connect(self.update_terminal)
         self.hamburgerMenu.openSettingsDialog.connect(self.showSettingsDialog)
+        
 
     def initUI(self):
         central_widget = QWidget(self)
@@ -225,7 +231,7 @@ class MainWindow(QMainWindow):
         # Initialize the terminal
         self.terminal = Terminal()
         layout.addWidget(self.terminal)
-        self.terminal.appendPlainText(f"> Welcome to the Market Analyzer tool. Plug in 'lst cmd' for a list of all commands. Exercise caution when overriding default settings.")
+        self.terminal.appendPlainText(f"> Welcome to the Market Analyzer tool. Plug in 'lst cmd' for a list of all commands. Exercise caution when overriding default settings for hyperparameter tuning, this could have adverse effects on the predictions and model capabilities. Keep in mind the models predict based on patterns and do not consider the Random walk hypothesis.")
 
         # Initialize the prompt
         self.prompt = Prompt()

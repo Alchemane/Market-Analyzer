@@ -23,6 +23,8 @@ class CommandHandler:
             "get %price": self.get_price_change_percentage,
             "get mktcap": self.get_market_cap,
             "get vol": self.get_volume,
+            "show settings": self.show_settings,
+            "set setting": self.set_settings,
         }
         self.models = {
             "lr": LinearRegressor(),
@@ -69,6 +71,17 @@ class CommandHandler:
             if cmd_key == "lst cmd":
                 result = self.get_list_cmd()
                 self.result_callback(result)
+            elif cmd_key == "show settings":
+                result = self.show_settings()
+                self.result_callback(result)
+            elif cmd_key.startswith("set setting"):
+                if len(parts) >= 3:
+                    setting_key = parts[2]
+                    setting_value = ' '.join(parts[3:])
+                    result = self.set_settings(setting_key, setting_value)
+                    self.result_callback(result)
+                else:
+                    self.result_callback("Insufficient arguments for setting a value.")
             else:
                 self.result_callback("Unknown command")
 
@@ -80,6 +93,8 @@ class CommandHandler:
             ("get %price {symbol} {days}", "Returns the percentage change of the price of the specified symbol since the beginning. Optionally, specify the number of recent days to use."),
             ("get mktcap {symbol}", "Returns the current market capitalization of the specified symbol."),
             ("get volume {symbol}", "Returns the trading current volume of the specified symbol."),
+            ("show settings", "Displays the settings and their respective values from the json profile."),
+            ("set setting {setting} {value}", "Updates the specified setting to the provided value."),
             ("fit lr {symbol} {days}", "Fits the linear regression model to the historical data of the specified symbol. Optionally, specify the number of recent days to use."),
             ("pred lr {symbol}", "Predicts the next price for the specified symbol using the fitted linear regression model. Requires the model to be fitted first."),
             ("fit svr {symbol} {days}", "Fits the support vector regression model to the historical data of the specified symbol. Optionally, specify the number of recent days to use."),
@@ -189,7 +204,6 @@ class CommandHandler:
 
             self.trained_models[model_key] = (model, metrics)
             result = f"Fitted {symbol} to the {model_key.upper()} model. Metrics: {metrics}"
-        print("Fitting model, about to invoke callback")
         if callback:
             callback(result)
         
@@ -211,5 +225,23 @@ class CommandHandler:
                 predicted_price = model.predict(X_new)
             
             result = f"Predicted price for {symbol} using {model_key.upper()} model is {predicted_price[0]}"
+        if callback:
+            callback(result)
+
+    def show_settings(self, callback=None):
+        getSettings = settings.get_settings()
+        displaySettings = []
+        for key, value in getSettings.items():
+            displaySettings.append(f"{key} = {value}")
+        result = "\n".join(displaySettings)
+        if callback:
+            callback(result)
+    
+    def set_settings(self, setting_key, setting_value, callback=None):
+        if setting_key in settings.to_dict():
+            settings.update_settings(**{setting_key: setting_value})
+        else:
+            print(f"Key {setting_key} not found in settings.")
+        result = f"Setting Saved!"
         if callback:
             callback(result)

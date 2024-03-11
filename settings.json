@@ -1,5 +1,5 @@
 {
-    "default_days": 10,
+    "default_days": 7,
     "watching_ticker": "nvda",
     "test_size": 0.2,
     "random_state": 42,
@@ -14,13 +14,13 @@
         1,
         1
     ],
-    "lstm_units": 50,
+    "lstm_units": 100,
     "lstm_activation": "relu",
     "lstm_dense": 1,
     "lstm_optimizer": "adam",
     "lstm_loss": "mse",
     "lstm_epochs": 50,
-    "lstm_batch_size": 32,
+    "lstm_batch_size": 12,
     "lstm_input_shape": [
         10,
         1
